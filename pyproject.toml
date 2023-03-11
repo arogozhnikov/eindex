@@ -133,10 +133,4 @@ select = [
 exclude = [".git", "__pycache__", ".venv"]
 
 [tool.ruff.isort]
-known-first-party = [
-    "pllcore",
-    "pllcli",
-    "pllcode",
-    "st_glidegrid",
-    "st_flowcyto",
-]
+known-first-party = ["verboseindex"]
