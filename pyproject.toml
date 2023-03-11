@@ -1,0 +1,142 @@
+[build-system]
+requires = ["hatchling>=1.10.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "verboseindex"
+description = "A concept of multidimensional indexing for tensors"
+readme = "README.md"
+requires-python = ">=3.8"
+
+# TODO
+# keywords = ['indexing', 'numpy', 'tensor']
+license = { text = 'MIT' }
+classifiers = [
+    'Intended Audience :: Science/Research',
+    'Programming Language :: Python :: 3',
+    'License :: OSI Approved :: MIT License',
+]
+dependencies = [
+    # no run-time or installation-time dependencies
+]
+dynamic = ["version"]
+authors = [{ name = 'Alex Rogozhnikov' }]
+
+
+[project.urls]
+Homepage = 'https://github.com/arogozhnikov/verboseindex'
+
+[tool.setuptools]
+packages = ['verboseindex']
+
+[tool.hatch.version]
+path = "verboseindex/__init__.py"
+
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "/.github",
+    "/.idea",
+    "/.pytest_cache",
+    "/build",
+    "/dist",
+    "/docs",
+    "/docs_src",
+    "/log",
+]
+
+[tool.hatch.build.targets.wheel]
+# should use packages from main section
+
+
+[tool.hatch.envs.docs]
+dependencies = [
+    "mkdocs~=1.4.0",
+    "mkdocs-material~=8.5.5",
+    "mkdocstrings[python-legacy]~=0.19.0",
+    "mkdocs-jupyter~=0.22.0",
+    # required by codehilite (highlithing in mkdocs)
+    "pygments~=2.13.0",
+]
+[tool.hatch.envs.docs.scripts]
+# For examples to build one has to run:
+# hatch run docs:build
+convert = "python scripts/convert_readme.py"
+build = "convert && mkdocs build --clean --strict {args}"
+serve = "convert && mkdocs serve --dev-addr localhost:8000 {args}"
+deploy = "convert && mkdocs build --clean --strict && mkdocs gh-deploy"
+
+
+[tool.hatch.envs.pypi.scripts]
+# hatch run pypi:deploy_test
+deploy_test = "hatch build --clean && hatch publish -r test"
+deploy = "hatch build --clean && hatch publish"
+
+[tool.hatch.envs.testing]
+dependencies = ['numpy']
+
+[tool.hatch.envs.testing.scripts]
+# hatch run testing:test
+test = "pytest tests"
+
+
+[tool.pytest.ini_options]
+# suppressing irrelevant warnings from google's tensorflow and pb2 on m1 mac
+# should be removed in 2023
+filterwarnings = [
+    "ignore:Call to deprecated create function FieldDescriptor",
+    "ignore:Call to deprecated create function Descriptor",
+    "ignore:Call to deprecated create function EnumDescriptor",
+    "ignore:Call to deprecated create function EnumValueDescriptor",
+    "ignore:Call to deprecated create function FileDescriptor",
+    "ignore:Call to deprecated create function OneofDescriptor",
+]
+
+
+[tool.black]
+line-length = 120
+target-version = ['py311']
+
+
+[tool.ruff]
+line-length = 120
+
+# this will be changed to true if there are useful auto-fixes available
+fix = true
+
+fixable = [
+    "I001", # isort-like sorting of imports
+]
+
+ignore = [
+    "E501",   # line too long
+    "E731",   # Do not assign a lambda expression
+    "C408",   # rewrite dict as literal
+    "C413",   # list around sorted
+    "C401",   # rewrite set( ) as set comprehension
+    "RUF100", # unused noqa.
+]
+
+select = [
+    "E",
+    "F",
+    "I",      # isort
+    "A001",   # variable shadows python built-in
+    "B",      # flake-bugbear, more advanced checks like non-mutable defaults
+    "RUF",    # ambiguous characters,
+    "RET501", # do not use return None if it is the only value
+    "RET502", # return None if can return anything else
+    "RET503", # return None if can return anything else
+    "W605",   # invalid escape sequence
+    "C4",     # flake8-comprehensions
+]
+
+exclude = [".git", "__pycache__", ".venv"]
+
+[tool.ruff.isort]
+known-first-party = [
+    "pllcore",
+    "pllcli",
+    "pllcode",
+    "st_glidegrid",
+    "st_flowcyto",
+]
