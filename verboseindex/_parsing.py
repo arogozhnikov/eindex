@@ -1,4 +1,3 @@
-
 from collections import Counter
 from typing import Iterable, List, Literal, Tuple
 
@@ -76,7 +75,8 @@ def _parse_indexing_part(x: str, *, allow_duplicate_indexers: bool = False) -> T
 
 # presence reflects which parts of expression a particular axis participates in
 # order is (in result, in array, in main indexing axes, in other indexing axes)
-Presence = Tuple[bool, bool, bool, bool] 
+Presence = Tuple[bool, bool, bool, bool]
+
 
 class ParsedPattern:
     def __init__(self, pattern: str) -> None:
@@ -88,7 +88,6 @@ class ParsedPattern:
         self.arr_axes_names = _parse_space_separated_dimensions(arr_pattern)
         self.ind_axes_names, self.ind_other_axes_names = _parse_indexing_part(ind_pattern)
 
-
         for group_name, group, subpattern in [
             ("Result", self.res_axes_names, left),
             ("Array", self.arr_axes_names, arr_pattern),
@@ -96,7 +95,6 @@ class ParsedPattern:
         ]:
             if len(set(group)) != len(group):
                 raise VerboseIndexError(f"{group_name} pattern ({subpattern}) contains a duplicated axis in {pattern}")
-
 
     def axis2presence(self) -> Iterable[Tuple[str, Presence]]:
         all_axes = {

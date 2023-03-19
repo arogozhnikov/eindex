@@ -302,7 +302,6 @@ def test_scatter():
     assert np.max(abs(result_flat)) == 0
 
 
-
 def test_gather():
     import numpy.array_api as np
 
@@ -357,7 +356,7 @@ def test_gather_scatter():
     index_pattern = "[i1, i2, i3] b         f r"
     array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
     indexer = generate_indexer(np, index_pattern, sizes=sizes)
-    result = gather_scatter(f"{final_pattern} <- {array_pattern}, {index_pattern} ", array, indexer, i3=sizes['i3'])
+    result = gather_scatter(f"{final_pattern} <- {array_pattern}, {index_pattern} ", array, indexer, i3=sizes["i3"])
     indexer_as_dict = enumerate_indexer(np, index_pattern, indexer=indexer, sizes=sizes)
 
     array_flat = flatten(np, array)
@@ -371,4 +370,3 @@ def test_gather_scatter():
             result_flat[ir] -= array_flat[ia]
 
     assert np.max(abs(result_flat)) == 0
-

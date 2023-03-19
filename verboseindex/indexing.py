@@ -188,7 +188,7 @@ def _prod(x: Iterable[int]) -> int:
 
 
 def _broadcast_shapes(shapes: List[Tuple[int, ...]]):
-    # naive, but works 
+    # naive, but works
     return [max(axis_len_in_arrays) for axis_len_in_arrays in zip(*shapes, strict=True)]
 
 
@@ -272,7 +272,7 @@ class IndexFormula:
             else:
                 raise VerboseIndexError(f"Axis '{axis}' is used incorrectly in {pattern}")
 
-        # we will not use self.indexer_axes, because we need original order of axes 
+        # we will not use self.indexer_axes, because we need original order of axes
         assert set(self.indexer_axes) == set(self.pattern_parser.ind_axes_names)
 
         self.array_composition = CompositionDecomposition(
@@ -333,20 +333,20 @@ class IndexFormula:
 class GatherFormula:
     def __init__(self, pattern: str, aggregation: Aggregation) -> None:
         """
-        Example in which one aggregates the data 
+        Example in which one aggregates the data
         'b t c <- b H W s c, [H, W] b t s replica'
 
         where multiple replicas are aggregated by plain sum
         """
         self.parsed_pattern = ParsedPattern(pattern)
         self.aggregation = aggregation
-        
-        self.indexer_axes = [] # H, W
-        self.batch_axes = [] # b
-        self.result_and_index_axes = [] # t
-        self.result_and_array_axes = [] # c
-        self.array_and_index_axes = [] # s
-        self.index_only_axes = [] # replica
+
+        self.indexer_axes = []  # H, W
+        self.batch_axes = []  # b
+        self.result_and_index_axes = []  # t
+        self.result_and_array_axes = []  # c
+        self.array_and_index_axes = []  # s
+        self.index_only_axes = []  # replica
 
         for axis, presence in self.parsed_pattern.axis2presence():
             if presence == (False, True, True, False):
@@ -363,7 +363,7 @@ class GatherFormula:
                 self.index_only_axes.append(axis)
             else:
                 raise VerboseIndexError(f"Axis '{axis}' is used incorrectly in {pattern}")
-            
+
         self.index_walks = self.batch_axes + self.indexer_axes + self.array_and_index_axes
 
         self.array_composition = CompositionDecomposition(
@@ -374,16 +374,19 @@ class GatherFormula:
         self.index_composition = CompositionDecomposition(
             decomposed_shape=self.parsed_pattern.ind_other_axes_names,
             # [replicas, shared_between_index_and_result]
-            composed_shape=[self.array_and_index_axes + self.index_only_axes, self.batch_axes + self.result_and_index_axes],
+            composed_shape=[
+                self.array_and_index_axes + self.index_only_axes,
+                self.batch_axes + self.result_and_index_axes,
+            ],
         )
 
         self.result_composition = CompositionDecomposition(
             decomposed_shape=self.parsed_pattern.res_axes_names,
             composed_shape=[self.batch_axes + self.result_and_index_axes, self.result_and_array_axes],
         )
-            
+
     def apply_to_array_api(self, arr, ind):
-        assert self.aggregation == 'sum'
+        assert self.aggregation == "sum"
         known_axes_lengths: dict[str, int] = {}
         xp = arr.__array_namespace__()
         ind_list = _index_to_list_array_api(ind)
@@ -417,7 +420,7 @@ class GatherFormula:
                 result_2d[j, :] += arr_2d[full_index_2d[i, j], :]
 
         # step 5. reshape result to correct form
-        return self.result_composition.decompose_arapi(result_2d, known_axes_lengths)        
+        return self.result_composition.decompose_arapi(result_2d, known_axes_lengths)
 
 
 class ScatterFormula:
@@ -451,7 +454,7 @@ class ScatterFormula:
                 self.only_index_other_axes.append(axis)
             else:
                 raise VerboseIndexError(f"Axis {axis} is used incorrectly in '{pattern}'")
-            
+
         self.index_walks = self.batch_axes + self.output_index_axes + self.output_index_other
 
         self.array_composition = CompositionDecomposition(
@@ -473,9 +476,8 @@ class ScatterFormula:
             composed_shape=[self.index_walks, self.output_array_axes],
         )
 
-
     def apply_to_array_api(self, arr: T, ind: Union[T, List[T]], axis_sizes: dict[str, int]):
-        assert self.aggregation == 'sum'
+        assert self.aggregation == "sum"
         ind_list = _index_to_list_array_api(ind)
         xp = arr.__array_namespace__()
         known_axes_lengths = {**axis_sizes}
@@ -554,7 +556,7 @@ class GatherScatterFormula:
                 self.index_reduced_axes.append(axis)
             else:
                 raise VerboseIndexError(f"Axis {axis} is used incorrectly in '{pattern}'")
-            
+
         self.index1_walks = self.batch_axes + self.input_indexer_axes
         self.index2_walks = self.batch_axes + self.result_and_index_axes + self.output_indexer_axes
         # output = sum of output_indexer, batch, result_and_index, result_and_array
@@ -743,17 +745,19 @@ def einindex(pattern: str, arr: T, ind: Union[T, List[T]], /):
     return formula.apply_to_array_api(arr, ind)
 
 
-def gather(pattern: str, arr: T, ind: Union[T, List[T]], aggregation: Aggregation='sum'):
+def gather(pattern: str, arr: T, ind: Union[T, List[T]], aggregation: Aggregation = "sum"):
     formula = GatherFormula(pattern=pattern, aggregation=aggregation)
     return formula.apply_to_array_api(arr, ind)
 
 
-def gather_scatter(pattern: str, arr: T, ind: Union[T, List[T]], /, aggregation: Aggregation='sum', **axis_sizes: int):
+def gather_scatter(
+    pattern: str, arr: T, ind: Union[T, List[T]], /, aggregation: Aggregation = "sum", **axis_sizes: int
+):
     formula = GatherScatterFormula(pattern, aggregation=aggregation)
     return formula.apply_to_array_api(arr, ind, axis_sizes=axis_sizes)
 
 
-def scatter(pattern: str, arr: T, ind: Union[T, List[T]], /, aggregation: Aggregation='sum', **axis_sizes: int):
+def scatter(pattern: str, arr: T, ind: Union[T, List[T]], /, aggregation: Aggregation = "sum", **axis_sizes: int):
     formula = ScatterFormula(pattern, aggregation=aggregation)
     return formula.apply_to_array_api(arr, ind, axis_sizes=axis_sizes)
 
