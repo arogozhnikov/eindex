@@ -133,3 +133,6 @@ dmypy.json
 
 # notebooks 
 test_notebooks
+
+# mac stuff
+.DS_Store
