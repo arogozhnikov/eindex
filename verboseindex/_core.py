@@ -1,75 +1,13 @@
 """
-Notation for verbose indexing-related operations.
-
-
-Indexing tensors over multiple dimensions is quite counter-intuitive,
-and there is no simple way to memorize this.
-
-This notation aims to simplify this process.
-Goal is to provide consistent set of operations related to indexing. 
-
-
-Examples
-
-1. Query a sequence of positions in an image.
-   einindex('t c <- h w c, [h, w] t', arr_bhwc, [h_indices, w_indices])
-
-   Same, but with a batch of images and a batch of sequences.
-   Query for every token in sequence a token in the corresponding image.
-   einindex('b t c <- b h w c, [h, w] b t', arr_bhwc, [h_indices_bt, w_indices_bt])
-
-   This is equivalent, so you can pass indexers independently or together
-   hw_indices_bt = np.asarray([h_indices_bt, w_indices_bt]
-   einindex('b t c <- b h w c, [h, w] b t', arr_bhwc, hw_indices_bt))
-
-   We always use first axis for indexing variables.
-   For this reason [...] part should always go first in indexer.
-
-   This makes the largest difference with Jonathan Malmaud's concept https://github.com/malmaud/einindex,
-   which has almost identical grammar, but puts special dimension last, while we put it first.
-   This trick allows naturally decomposing multiindex into individual dimensions or vice versa.
-
-
-2. query for every token in the video the most suitable word in a (matching) sentence
-   einindex('b t h w <- seq b, [seq] t b h w', arr_tbc, [seq_indices_tbhw])
-
-   note, that only one indexer is used, but still it has to be enclosed in the list.
-   That's a price for being generic. Alternatively leading singleton dimension can be added.
-
-
-3. (not supported now, future planning)
-   for every timeframe in a video, find the token with the highest norm (across h and w), and compose a new stack of them
-   indices_2bt = argmax(x_bthwc.norm(dim=-1), 'b t h w -> [h, w] b t')
-   selected_embeddings_btc = einindex('b t c <- b t h w c, [h, w] b t', x_bthwc, indices_2bt)
-
-   while currently question is around 'how do we index',
-   it is important to pre-align that with a question 'what are natural ways to get indices'.
-   Most common are argmin/max. less common options: topk (works here), argsort, and random sampling.
-   It is sufficient to just provide argsort. Topk and sampling can be build on the top of argsort
-
-
-
-Some important properties of this notation:
-- support for multidimensional indexing.
-  Indexing can use a list of indexers or a single tensor with multiple indexers.
-- 'batch' indexing, when some axes of indexer and array should be matched
-- extensible for (named) ellipses, including variadic number of indexers
-- extensible for einops-style compositions and decompositions
-- extensible for outer indexing when indexers are not aligned
-
+Core formulas for transformations
 """
-
-
 from typing import TYPE_CHECKING, Any, Iterable, List, Literal, Tuple, TypeVar, Union
 
 from . import VerboseIndexError
 from ._parsing import ParsedPattern, _parse_indexing_part, _parse_space_separated_dimensions
 
 T = TypeVar("T")
-if TYPE_CHECKING:
-    from numpy.array_api._array_object import Array
 
-    T = TypeVar("T", bound=Array)
 
 Aggregation = Literal["set", "min", "max", "sum", "mean", "std", "logsumexp"]
 
@@ -187,8 +125,9 @@ def _prod(x: Iterable[int]) -> int:
     return result
 
 
-def _broadcast_shapes(shapes: List[Tuple[int, ...]]):
-    # naive, but works
+def _broadcast_shapes(shapes: List[Tuple[int, ...]]) -> List[int]:
+    # naive, does not really verify shapes
+    # number of dimensions should be the same
     return [max(axis_len_in_arrays) for axis_len_in_arrays in zip(*shapes, strict=True)]
 
 
@@ -196,14 +135,6 @@ def _index_to_list_array_api(ind) -> List:
     if isinstance(ind, list):
         return ind
     return [ind[i, ...] for i in range(ind.shape[0])]
-
-
-# def _learn_axes_sizes(tensor, tensor_axes: list[str], known_axes_sizes: dict[str, int]):
-#     for dim, axis_name in zip(tensor.shape, tensor_axes, strict=True):
-#         if axis_name in known_axes_sizes:
-#             assert dim == known_axes_sizes[axis_name]
-#         else:
-#             known_axes_sizes[axis_name] = dim
 
 
 def compute_full_index(
@@ -214,6 +145,7 @@ def compute_full_index(
     flat_index_over: list[str],
     known_axes_sizes: dict,
 ) -> Any:
+    # works with xp and jax
     assert len(ind) == len(indexing_axes)
     device = ind[0].device
     for indexer in ind:
@@ -738,40 +670,3 @@ class ArgsortFormula:
             flat_index = flat_index // axis_len
 
         return xp.stack(result, axis=0)
-
-
-def einindex(pattern: str, arr: T, ind: Union[T, List[T]], /):
-    formula = IndexFormula(pattern)
-    return formula.apply_to_array_api(arr, ind)
-
-
-def gather(pattern: str, arr: T, ind: Union[T, List[T]], aggregation: Aggregation = "sum"):
-    formula = GatherFormula(pattern=pattern, aggregation=aggregation)
-    return formula.apply_to_array_api(arr, ind)
-
-
-def gather_scatter(
-    pattern: str, arr: T, ind: Union[T, List[T]], /, aggregation: Aggregation = "sum", **axis_sizes: int
-):
-    formula = GatherScatterFormula(pattern, aggregation=aggregation)
-    return formula.apply_to_array_api(arr, ind, axis_sizes=axis_sizes)
-
-
-def scatter(pattern: str, arr: T, ind: Union[T, List[T]], /, aggregation: Aggregation = "sum", **axis_sizes: int):
-    formula = ScatterFormula(pattern, aggregation=aggregation)
-    return formula.apply_to_array_api(arr, ind, axis_sizes=axis_sizes)
-
-
-def argmax(tensor, pattern: str, /):
-    formula = ArgmaxFormula(pattern)
-    return formula.apply_to_array_api(tensor)
-
-
-def argmin(tensor, pattern: str, /):
-    formula = ArgminFormula(pattern)
-    return formula.apply_to_array_api(tensor)
-
-
-def argsort(tensor, pattern: str, /):
-    formula = ArgsortFormula(pattern)
-    return formula.apply_to_array_api(tensor)
