@@ -1,91 +1,129 @@
+from typing import TypeVar
+
 from verboseindex.indexing import (
     CompositionDecomposition,
-    einindex,
-    gather_scatter, 
-    argmax, 
-    argmin, 
+    _index_to_list_array_api,
+    argmax,
+    argmin,
     argsort,
-    arange_at_position,
+    einindex,
+    gather,
+    gather_scatter,
+    scatter,
 )
+
+from .utils import (
+    arange_at,
+    enumerate_indexer,
+    flatten,
+    generate_array,
+    generate_indexer,
+    pseudo_random_tensor,
+    range_of_shape,
+    to_flat_index,
+)
+
+T = TypeVar("T")
+
+
+# TODO tests for inf, +inf, -inf, nan?
+
+
+def compose_index(indexers, shapes: list):
+    indexers = _index_to_list_array_api(indexers)
+
+    result = 0
+    for indexer, axis_len in zip(indexers, shapes, strict=True):
+        result = result * axis_len + indexer
+    return result
+
+
+def _enum_1d(arr):
+    for i in range(arr.shape[0]):
+        yield i, int(arr[i, ...])
+
 
 def test_composition_and_decomposition():
     import numpy.array_api as np
 
-    x = np.arange(2 * 3 * 5 * 7)
-    x = np.reshape(x, (2, 3, 5, 7))
+    x = range_of_shape(2, 3, 5, 7, xp=np)
     comp = CompositionDecomposition(
         decomposed_shape=["a", "b", "c", "d"],
         composed_shape=[["a", "b"], ["c", "d"]],
     )
-    assert comp.compose(x, known_axes_lengths={}).shape == (2 * 3, 5 * 7)
+    x_composed = comp.compose_arapi(x, known_axes_lengths={})
+    assert x_composed.shape == (2 * 3, 5 * 7)
+    assert np.all(x_composed == np.reshape(x, (2 * 3, 5 * 7)))
 
     y = CompositionDecomposition(
         decomposed_shape=["a", "b", "c", "d"],
-        composed_shape=[["a", "b"], [], ["c", "d"]],
-    ).compose(x, {})
-    assert y.shape == (2 * 3, 1, 5 * 7)
+        composed_shape=[["a", "b"], [], ["c", "d"], []],
+    ).compose_arapi(x, {})
+    assert y.shape == (2 * 3, 1, 5 * 7, 1)
     assert np.all(np.reshape(x, (-1,)) == np.reshape(y, (-1,)))
 
     comp = CompositionDecomposition(
         decomposed_shape=["a", "b", "e", "c", "d"],
         composed_shape=[["e", "c"], ["b"], ["a", "d"]],
     )
-    x = np.arange(2 * 3 * 5 * 7 * 3)
-    x = np.reshape(x, (2, 3, 5, 7, 3))
+    x = range_of_shape(2, 3, 5, 7, 3, xp=np)
 
     axes = {}
-    y = comp.compose(x, axes)
-    x2 = comp.decompose(y, axes)
+    y = comp.compose_arapi(x, axes)
+    assert y.shape == (5 * 7, 3, 2 * 3)
+    y_manual = np.reshape(np.permute_dims(x, (2, 3, 1, 0, 4)), y.shape)
+
+    assert np.all(y == y_manual)
+    x2 = comp.decompose_arapi(y, axes)
     assert np.all(x == x2)
-
-
 
 
 def test_simple_indexing():
     import numpy.array_api as np
 
     # simple 2d test
-    arr = np.reshape(np.arange(5 * 7), (5, 7))
+    arr = pseudo_random_tensor(np, [5, 7])
     ind = np.arange(7) % 5
     x = einindex("j <- i j, [i] j", arr, [ind])
-    for j, i in enumerate(ind):
+    for j, i in _enum_1d(ind):
         assert arr[i, j] == x[j]
 
     y = einindex("j <- j i, [i] j", np.permute_dims(arr, (1, 0)), [ind])
-    for j, i in enumerate(ind):
+    for j, i in _enum_1d(ind):
         assert arr[i, j] == y[j]
 
 
 def test_multidimensional_indexing():
     import numpy.array_api as np
 
+    B, H, W, C, T = 2, 3, 5, 7, 11
+
     embedding_bhwc = (
-        +arange_at_position(np, 4, 0, 2) * 1000
-        + arange_at_position(np, 4, 1, 3) * 100
-        + arange_at_position(np, 4, 2, 5) * 10
-        + arange_at_position(np, 4, 3, 7) * 1
+        0
+        + arange_at(np, 4, 0, B) * 1000
+        + arange_at(np, 4, 1, H) * 100
+        + arange_at(np, 4, 2, W) * 10
+        + arange_at(np, 4, 3, C) * 1
     )
 
-    hindices_bt = np.reshape(np.arange(6), (2, 3)) % 3
-    windices_bt = np.reshape(np.arange(6), (2, 3)) % 5
+    hindices_bt = pseudo_random_tensor(np, [B, T]) % H
+    windices_bt = pseudo_random_tensor(np, [B, T]) % W
 
-    # imagine that you have pairs of image <> sentence
-    # your goal is to get most suitable token from image for every token in sentence
-    # thus for every token in sentence you compute best k and v
+    # imagine that you have pairs of image <> sentence.
+    # goal is to get most suitable token from image for every token in sentence
+    # thus for every token in sentence you compute best H and vW
 
-    result = einindex(
-        "c t b <- b h w c, [h, w] b t", embedding_bhwc, [hindices_bt, windices_bt]
-    )
+    result = einindex("c t b <- b H W c, [H, W] b t", embedding_bhwc, [hindices_bt, windices_bt])
     # example of using a single array for indexing multiple axes
     hw_indices_bt = np.stack([hindices_bt, windices_bt])
-    result2 = einindex("c t b <- b h w c, [h, w] b t", embedding_bhwc, hw_indices_bt)
+    result2 = einindex("c t b <- b H W c, [H, W] b t", embedding_bhwc, hw_indices_bt)
     assert np.all(result == result2)
 
     # check vs manual element computation
     result_manual = result * 0
-    for b in range(2):
-        for t in range(3):
-            for c in range(7):
+    for b in range(B):
+        for t in range(T):
+            for c in range(C):
                 h = int(hindices_bt[b, t])
                 w = int(windices_bt[b, t])
                 result_manual[c, t, b] = embedding_bhwc[b, h, w, c]
@@ -103,10 +141,10 @@ def test_reverse_indexing():
     W = 9
 
     arr_gtbc = (
-        +arange_at_position(np, 4, 0, G) * 1000
-        + arange_at_position(np, 4, 1, T) * 100
-        + arange_at_position(np, 4, 2, B) * 10
-        + arange_at_position(np, 4, 3, C) * 1
+        +arange_at(np, 4, 0, G) * 1000
+        + arange_at(np, 4, 1, T) * 100
+        + arange_at(np, 4, 2, B) * 10
+        + arange_at(np, 4, 3, C) * 1
     )
 
     t_indices_gbhw = np.reshape(np.arange(G * B * H * W), (G, B, H, W)) % T
@@ -125,11 +163,27 @@ def test_reverse_indexing():
     assert np.all(result == result_manual)
 
 
-def test_einargmax():
+def test_argmax_straight():
+    import numpy.array_api as np
+
+    A, B, C, D = 2, 3, 5, 7
+    x = pseudo_random_tensor(np, [A, B, C, D])
+    # set one maximum for every B, so argmax is unambiguous
+    for b in range(B):
+        x[1, b, b + 1, b + 2] = 2000 + b
+    [a, b, c, d] = argmax(x, "a b c d -> [a, b, c, d]")
+    assert x[a, b, c, d] == np.max(x)
+    cad = argmax(x, "a b c d -> [c, a, d] b")
+    comp = CompositionDecomposition(composed_shape=[["c", "a", "d"], ["b"]], decomposed_shape=["a", "b", "c", "d"])
+    reference = np.argmax(comp.compose_arapi(x, {}), axis=0)
+    assert np.all(reference == compose_index(cad, [C, A, D]))
+
+
+def test_argmax_by_indexing():
     import numpy.array_api as np
 
     x = np.reshape(np.arange(3 * 4 * 5), (3, 4, 5))
-    x[1, 2, 3] = 1000
+    x[1, 2, 3] = 10000
     reference = np.argmax(x, axis=0)
 
     assert np.all(argmax(x, "i j k -> [i] j k")[0, ...] == reference)
@@ -151,7 +205,7 @@ def test_einargmax():
     assert np.all(einindex(" <- i j k, [k, i, j]", x, ind) == np.max(x))
 
 
-def test_einargsort():
+def test_argsort_against_numpy():
     import numpy.array_api as np
 
     x = np.reshape(np.arange(3 * 4 * 5), (3, 4, 5))
@@ -162,21 +216,15 @@ def test_einargsort():
     assert np.all(argsort(x, "i j k -> [i] k j order")[0, ...] == right)
 
     ind = argsort(x, "i j k -> [k, i, j] order")
-    assert np.all(
-        einindex("order <- i j k, [k, i, j] order", x, ind)
-        == np.sort(np.reshape(x, (-1,)))
-    )
+    assert np.all(einindex("order <- i j k, [k, i, j] order", x, ind) == np.sort(np.reshape(x, (-1,))))
 
     ind = argsort(x, "i j k -> [k, i] order j")
     reference = np.permute_dims(x, (0, 2, 1))
     reference = np.reshape(reference, (-1, reference.shape[-1]))
-    assert np.all(
-        einindex("order j <- i j k, [k, i] order j", x, ind)
-        == np.sort(reference, axis=0)
-    )
+    assert np.all(einindex("order j <- i j k, [k, i] order j", x, ind) == np.sort(reference, axis=0))
 
 
-def test_gather_scatter():
+def test_gather_scatter_runs():
     import numpy.array_api as np
 
     x = np.reshape(np.arange(3 * 4 * 5), (3, 4, 5))
@@ -188,4 +236,139 @@ def test_gather_scatter():
     print(result)
 
 
-test_gather_scatter()
+def test_index():
+    import numpy.array_api as np
+
+    sizes = dict(
+        a=2,
+        b=3,
+        c=5,
+        d=7,
+        e=2,
+        f=3,
+        g=4,
+        h=5,
+    )
+
+    array = generate_array(np, "a b c d", sizes=sizes)
+    indexer = generate_indexer(np, "[a, c] d f g", sizes=sizes)
+    result = einindex("g f d b <- a b c d, [a, c] d f g", array, indexer)
+    indexer_as_dict = enumerate_indexer(np, "[a, c] d f g", indexer=indexer, sizes=sizes)
+
+    for b in range(sizes["b"]):
+        flat_index_arr = to_flat_index("a b c d", {**indexer_as_dict, "b": b}, sizes=sizes)
+        flat_index_result = to_flat_index("g f d b", {**indexer_as_dict, "b": b}, sizes=sizes)
+
+        array_flat = flatten(np, array)
+        result_flat = flatten(np, result)
+
+        for i, j in zip(flat_index_arr, flat_index_result, strict=True):
+            assert array_flat[i] == result_flat[j]
+
+
+def test_scatter():
+    import numpy.array_api as np
+
+    sizes = dict(
+        b=3,
+        c=5,
+        d=7,
+        e=2,
+        f=3,
+        g=4,
+        h=5,
+    )
+
+    array_pattern = "b c d"
+    index_pattern = "[f, h] c b e"
+    final_pattern = "b f h d e"
+    array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
+    indexer = generate_indexer(np, index_pattern, sizes=sizes)
+    result = scatter(
+        f"{final_pattern} <- {array_pattern}, {index_pattern} ", array, indexer, f=sizes["f"], h=sizes["h"]
+    )
+    indexer_as_dict = enumerate_indexer(np, index_pattern, indexer=indexer, sizes=sizes)
+
+    array_flat = flatten(np, array)
+    result_flat = flatten(np, result)
+
+    for d in range(sizes["d"]):
+        flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
+        flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
+
+        for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+            result_flat[ir] -= array_flat[ia]
+
+    assert np.max(abs(result_flat)) == 0
+
+
+
+def test_gather():
+    import numpy.array_api as np
+
+    sizes = dict(
+        a=2,
+        b=3,
+        c=5,
+        d=7,
+        e=2,
+        f=3,
+        g=4,
+        h=5,
+        r=3,
+    )
+
+    final_pattern = "b c d"
+    array_pattern = "b f h d r"
+    index_pattern = "[f, h] c b a r"
+    array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
+    indexer = generate_indexer(np, index_pattern, sizes=sizes)
+    result = gather(f"{final_pattern} <- {array_pattern}, {index_pattern} ", array, indexer)
+    indexer_as_dict = enumerate_indexer(np, index_pattern, indexer=indexer, sizes=sizes)
+
+    array_flat = flatten(np, array)
+    result_flat = flatten(np, result)
+
+    for d in range(sizes["d"]):
+        flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
+        flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
+
+        for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+            result_flat[ir] -= array_flat[ia]
+
+    assert np.max(abs(result_flat)) == 0
+
+
+def test_gather_scatter():
+    import numpy.array_api as np
+
+    sizes = dict(
+        b=3,
+        c=5,
+        r=3,
+        i1=2,
+        i2=3,
+        i3=5,
+        f=4,
+    )
+
+    final_pattern = "             b c i1 i3 f  "
+    array_pattern = "             b c i1 i2    "
+    index_pattern = "[i1, i2, i3] b         f r"
+    array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
+    indexer = generate_indexer(np, index_pattern, sizes=sizes)
+    result = gather_scatter(f"{final_pattern} <- {array_pattern}, {index_pattern} ", array, indexer, i3=sizes['i3'])
+    indexer_as_dict = enumerate_indexer(np, index_pattern, indexer=indexer, sizes=sizes)
+
+    array_flat = flatten(np, array)
+    result_flat = flatten(np, result)
+
+    for c in range(sizes["c"]):
+        flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "c": c}, sizes=sizes)
+        flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "c": c}, sizes=sizes)
+
+        for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+            result_flat[ir] -= array_flat[ia]
+
+    assert np.max(abs(result_flat)) == 0
+
