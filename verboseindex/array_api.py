@@ -1,51 +1,58 @@
-from typing import List, TypeVar, Union
+from typing import Any, List, Protocol, TypeVar, Union
 
-from ._core import (
-    Aggregation,
-    ArgmaxFormula,
-    ArgminFormula,
-    ArgsortFormula,
-    GatherFormula,
-    GatherScatterFormula,
-    IndexFormula,
-    ScatterFormula,
-)
-
-T = TypeVar("T")
+from ._core import IXP, ArgmaxFormula, ArgminFormula, ArgsortFormula, IndexFormula
 
 
-def argmax(tensor: T, pattern: str, /) -> T:
+class ArrayProtocol(Protocol):
+    def __array_namespace__(self) -> Any:
+        pass
+
+    @property
+    def device(self) -> Any:
+        pass
+
+
+class ArrayApiIXP(IXP):
+    def __init__(self, xp) -> None:
+        self.xp = xp
+
+    def permute_dims(self, arr, permutation):
+        return self.xp.permute_dims(arr, permutation)
+
+    def arange_at_position(self, n_axes, axis, axis_len, array_to_copy_device_from: ArrayProtocol):
+        xp = self.xp
+        x = xp.arange(axis_len, dtype=xp.int64, device=array_to_copy_device_from.device)
+        shape = [1] * n_axes
+        shape[axis] = axis_len
+        x = xp.reshape(x, shape)
+        return x
+
+
+Array = TypeVar("Array", bound=ArrayProtocol)
+
+
+def argmax(tensor: Array, pattern: str, /) -> Array:
     formula = ArgmaxFormula(pattern)
-    return formula.apply_to_array_api(tensor)
+    ixp = ArrayApiIXP(tensor.__array_namespace__())
+    return formula.apply_to_ixp(ixp, tensor)
 
 
-def argmin(tensor: T, pattern: str, /) -> T:
+def argmin(tensor: Array, pattern: str, /) -> Array:
     formula = ArgminFormula(pattern)
-    return formula.apply_to_array_api(tensor)
+    ixp = ArrayApiIXP(tensor.__array_namespace__())
+    return formula.apply_to_ixp(ixp, tensor)
 
 
-def argsort(tensor: T, pattern: str, /) -> T:
+def argsort(tensor: Array, pattern: str, /) -> Array:
     formula = ArgsortFormula(pattern)
-    return formula.apply_to_array_api(tensor)
+    ixp = ArrayApiIXP(tensor.__array_namespace__())
+    return formula.apply_to_ixp(ixp, tensor)
 
 
-def einindex(pattern: str, arr: T, ind: Union[T, List[T]], /):
+def einindex(pattern: str, arr: Array, ind: Union[Array, List[Array]], /):
     formula = IndexFormula(pattern)
-    return formula.apply_to_array_api(arr, ind)
+    ixp = ArrayApiIXP(arr.__array_namespace__())
+    return formula.apply_to_array_api(ixp, arr, ind)
 
 
-def gather(pattern: str, arr: T, ind: Union[T, List[T]], aggregation: Aggregation = "sum"):
-    formula = GatherFormula(pattern=pattern, aggregation=aggregation)
-    return formula.apply_to_array_api(arr, ind)
-
-
-def gather_scatter(
-    pattern: str, arr: T, ind: Union[T, List[T]], /, aggregation: Aggregation = "sum", **axis_sizes: int
-):
-    formula = GatherScatterFormula(pattern, aggregation=aggregation)
-    return formula.apply_to_array_api(arr, ind, axis_sizes=axis_sizes)
-
-
-def scatter(pattern: str, arr: T, ind: Union[T, List[T]], /, aggregation: Aggregation = "sum", **axis_sizes: int):
-    formula = ScatterFormula(pattern, aggregation=aggregation)
-    return formula.apply_to_array_api(arr, ind, axis_sizes=axis_sizes)
+# current standard misses API for indexing

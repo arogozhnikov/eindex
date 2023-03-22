@@ -1,7 +1,7 @@
 """
 Core formulas for transformations
 """
-from typing import TYPE_CHECKING, Any, Iterable, List, Literal, Tuple, TypeVar, Union
+from typing import Any, Iterable, List, Literal, Tuple, TypeVar, Union
 
 from . import VerboseIndexError
 from ._parsing import ParsedPattern, _parse_indexing_part, _parse_space_separated_dimensions
@@ -9,15 +9,27 @@ from ._parsing import ParsedPattern, _parse_indexing_part, _parse_space_separate
 T = TypeVar("T")
 
 
-Aggregation = Literal["set", "min", "max", "sum", "mean", "std", "logsumexp"]
+Aggregation = Literal["min", "max", "sum", "mean", "std", "logsumexp"]
+
+# conventions: _aapi is array api
 
 # which functions do we use?
 # shape/ndim, reshape, transpose
 # xp.zeros (create an empty index of correct shape, or create result of correct shape)
-# 2d-indexing  over the first axis x_ij[i_k] -> y_kj
+# 2d-indexing  over the first axis x_ij[i_k] -> y_kj                   # gather
 # 2d-reduction over the first axis x_ij[i_k] += y_kj -> result is x_ij # gather-scatter
-# multi-reduction: x_ij[i_rk] += y_kj, which works like                # scatter
+# multi-reduction: x_ij[i_rk] += y_kj,                                 # scatter
 # the last two are not a part of array api standard
+
+
+class IXP:
+    xp: Any
+
+    def permute_dims(self, arr, permutation):
+        raise NotImplementedError()
+
+    def arange_at_position(self, n_axes, axis, axis_len, array_to_copy_device_from):
+        raise NotImplementedError()
 
 
 class CompositionDecomposition:
@@ -44,8 +56,7 @@ class CompositionDecomposition:
         self.needs_reshape = any(len(g) != 1 for g in self.composed_shape)
         self.needs_transposition = list(flat_shape) != list(self.composed_shape)
 
-    def decompose_arapi(self, x, known_axes_lengths: dict[str, int]):
-        xp = x.__array_namespace__()
+    def decompose_ixp(self, ixp: IXP, x: T, known_axes_lengths: dict[str, int]) -> T:
         shape = x.shape
 
         flat_shape = []
@@ -71,20 +82,18 @@ class CompositionDecomposition:
                 flat_shape.append(known_axes_lengths[axis])
 
         if self.needs_reshape:
-            x = xp.reshape(x, tuple(flat_shape))
+            x = ixp.xp.reshape(x, tuple(flat_shape))
         else:
             # will be removed
             assert x.shape == tuple(
                 flat_shape
             ), f"shapes: {x.shape=} {flat_shape=} {self.composed_shape} {self.decomposed_shape}"
         if self.needs_transposition:
-            return xp.permute_dims(x, self.decompose_transposition)
+            return ixp.permute_dims(x, self.decompose_transposition)
         else:
             return x
 
-    def compose_arapi(self, x, known_axes_lengths: dict[str, int]):
-        xp = x.__array_namespace__()
-
+    def compose_ixp(self, ixp: IXP, x: T, known_axes_lengths: dict[str, int]) -> T:
         for axis_len, axis_name in zip(x.shape, self.decomposed_shape, strict=True):
             if axis_name in known_axes_lengths:
                 assert known_axes_lengths[axis_name] == axis_len
@@ -92,7 +101,7 @@ class CompositionDecomposition:
                 known_axes_lengths[axis_name] = axis_len
 
         if self.needs_transposition:
-            x = xp.permute_dims(x, self.compose_transposition)
+            x = ixp.permute_dims(x, self.compose_transposition)
 
         new_shape = []
         for axis_group in self.composed_shape:
@@ -102,20 +111,12 @@ class CompositionDecomposition:
             new_shape.append(composed_axis_size)
 
         if self.needs_reshape:
-            x = xp.reshape(x, tuple(new_shape))
+            x = ixp.xp.reshape(x, tuple(new_shape))
         else:
             # will be removed
             assert x.shape == tuple(new_shape)
 
         return x
-
-
-def arange_at_position(xp, n_axes, axis, axis_len, device):
-    x = xp.arange(axis_len, dtype=xp.int64, device=device)
-    shape = [1] * n_axes
-    shape[axis] = axis_len
-    x = xp.reshape(x, shape)
-    return x
 
 
 def _prod(x: Iterable[int]) -> int:
@@ -137,17 +138,15 @@ def _index_to_list_array_api(ind) -> List:
     return [ind[i, ...] for i in range(ind.shape[0])]
 
 
-def compute_full_index(
-    xp,
+def compute_full_index_ixp(
+    ixp: IXP,
     ind: list,
     indexing_axes: list[str],
     indexer_other_axes_names: list[str],
     flat_index_over: list[str],
     known_axes_sizes: dict,
 ) -> Any:
-    # works with xp and jax
     assert len(ind) == len(indexing_axes)
-    device = ind[0].device
     for indexer in ind:
         assert len(indexer.shape) == len(indexer_other_axes_names)
 
@@ -164,12 +163,11 @@ def compute_full_index(
             axis_id = indexer_other_axes_names.index(axis_name)
             flat_index = (
                 flat_index
-                + arange_at_position(
-                    xp,
+                + ixp.arange_at_position(
                     len(indexer_other_axes_names),
                     axis=axis_id,
                     axis_len=known_axes_sizes[axis_name],
-                    device=device,
+                    array_to_copy_device_from=ind[0],
                 )
                 * shift
             )
@@ -194,7 +192,7 @@ class IndexFormula:
             if presence == (False, True, True, False):
                 self.indexer_axes.append(axis)
             elif presence[2]:
-                raise VerboseIndexError(f"Wrong usage of indexer variable {axis} in {pattern}")
+                raise VerboseIndexError(f"Wrong usage of indexer variable '{axis}' in {pattern}")
             elif presence == (True, True, False, True):
                 self.batch_axes.append(axis)
             elif presence == (True, False, False, True):
@@ -229,20 +227,19 @@ class IndexFormula:
             ],
         )
 
-    def apply_to_array_api(self, arr: T, ind: Union[T, List[T]]):
+    def apply_to_array_api(self, ixp: IXP, arr: T, ind: Union[T, List[T]]) -> T:
         known_axes_sizes: dict[str, int] = {}
-        xp = arr.__array_namespace__()
         ind_list = _index_to_list_array_api(ind)
 
         for indexer in ind_list:
             assert len(indexer.shape) == len(self.pattern_parser.ind_other_axes_names)
 
         # step 1. transpose, reshapes of arr; learn its dimensions
-        arr_2d = self.array_composition.compose_arapi(arr, known_axes_sizes)
+        arr_2d = self.array_composition.compose_ixp(ixp, arr, known_axes_sizes)
 
         # step 2. compute shifts and create an actual indexing array
-        full_index = compute_full_index(
-            xp,
+        full_index = compute_full_index_ixp(
+            ixp,
             ind=ind_list,
             indexing_axes=self.pattern_parser.ind_axes_names,
             indexer_other_axes_names=self.pattern_parser.ind_other_axes_names,
@@ -251,15 +248,49 @@ class IndexFormula:
         )
 
         # step 3. Flatten index
-        full_index = self.index_composition.compose_arapi(full_index, known_axes_sizes)
+        full_index = self.index_composition.compose_ixp(ixp, full_index, known_axes_sizes)
 
         # step 4. indexing
         # python array api has xp.take, but it is not implemented anywhere
-        # result_2d = xp.take(arr_2d, full_index, axis=0)
-        result_2d = xp.stack([arr_2d[full_index[i], :] for i in range(full_index.shape[0])])
+        xp = ixp.xp
+        if hasattr(xp, "take"):
+            result_2d = xp.take(arr_2d, full_index, axis=0)
+        else:
+            result_2d = xp.stack([arr_2d[full_index[i], :] for i in range(full_index.shape[0])])
 
         # step 5. reshape result to correct form
-        return self.result_composition.decompose_arapi(result_2d, known_axes_sizes)
+        return self.result_composition.decompose_ixp(ixp, result_2d, known_axes_sizes)
+
+    def apply_to_numpy(self, ixp: IXP, arr: T, ind: Union[T, List[T]]) -> T:
+        known_axes_sizes: dict[str, int] = {}
+        ind_list = _index_to_list_array_api(ind)
+
+        for indexer in ind_list:
+            assert len(indexer.shape) == len(self.pattern_parser.ind_other_axes_names)
+
+        # step 1. transpose, reshapes of arr; learn its dimensions
+        arr_2d = self.array_composition.compose_ixp(ixp, arr, known_axes_sizes)
+
+        # step 2. compute shifts and create an actual indexing array
+        full_index = compute_full_index_ixp(
+            ixp,
+            ind=ind_list,
+            indexing_axes=self.pattern_parser.ind_axes_names,
+            indexer_other_axes_names=self.pattern_parser.ind_other_axes_names,
+            flat_index_over=self.batch_axes + self.pattern_parser.ind_axes_names,
+            known_axes_sizes=known_axes_sizes,
+        )
+
+        # step 3. Flatten index
+        full_index = self.index_composition.compose_ixp(ixp, full_index, known_axes_sizes)
+
+        # step 4. indexing
+        import numpy as np
+
+        result_2d = np.take(arr_2d, full_index, axis=0)
+
+        # step 5. reshape result to correct form
+        return self.result_composition.decompose_ixp(ixp, result_2d, known_axes_sizes)
 
 
 class GatherFormula:
@@ -317,21 +348,21 @@ class GatherFormula:
             composed_shape=[self.batch_axes + self.result_and_index_axes, self.result_and_array_axes],
         )
 
-    def apply_to_array_api(self, arr, ind):
+    def apply_to_numpy(self, ixp: IXP, arr, ind):
         assert self.aggregation == "sum"
         known_axes_lengths: dict[str, int] = {}
-        xp = arr.__array_namespace__()
         ind_list = _index_to_list_array_api(ind)
+        import numpy as np
 
         for indexer in ind_list:
             assert len(indexer.shape) == len(self.parsed_pattern.ind_other_axes_names)
 
         # step 1. transpose, reshapes of arr; learn its dimensions
-        arr_2d = self.array_composition.compose_arapi(arr, known_axes_lengths)
+        arr_2d = self.array_composition.compose_ixp(ixp, arr, known_axes_lengths)
 
         # step 2. compute shifts and create an actual indexing array
-        full_index_2d = compute_full_index(
-            xp,
+        full_index_2d = compute_full_index_ixp(
+            ixp,
             ind=ind_list,
             indexing_axes=self.parsed_pattern.ind_axes_names,
             indexer_other_axes_names=self.parsed_pattern.ind_other_axes_names,
@@ -340,19 +371,23 @@ class GatherFormula:
         )
 
         # step 3. Flatten index
-        full_index_2d = self.index_composition.compose_arapi(full_index_2d, known_axes_lengths)
+        full_index_2d = self.index_composition.compose_ixp(ixp, full_index_2d, known_axes_lengths)
 
         # step 4. indexing
         cshape = self.result_composition.composed_shape
         shape = [_prod(known_axes_lengths[var] for var in group) for group in cshape]
-        result_2d = xp.zeros(shape, dtype=arr.dtype, device=arr.device)
+        result_2d = np.zeros(shape, dtype=arr.dtype)  # no device
 
         for i in range(full_index_2d.shape[0]):
             for j in range(full_index_2d.shape[1]):
                 result_2d[j, :] += arr_2d[full_index_2d[i, j], :]
 
+        if self.aggregation == "sum":
+            result_2d_new = arr_2d[full_index_2d].sum(axis=0)
+            assert np.allclose(result_2d, result_2d_new)
+
         # step 5. reshape result to correct form
-        return self.result_composition.decompose_arapi(result_2d, known_axes_lengths)
+        return self.result_composition.decompose_ixp(ixp, result_2d, known_axes_lengths)
 
 
 class ScatterFormula:
@@ -408,14 +443,13 @@ class ScatterFormula:
             composed_shape=[self.index_walks, self.output_array_axes],
         )
 
-    def apply_to_array_api(self, arr: T, ind: Union[T, List[T]], axis_sizes: dict[str, int]):
-        assert self.aggregation == "sum"
+    def apply_to_numpy(self, ixp: IXP, arr: T, ind: Union[T, List[T]], axis_sizes: dict[str, int]):
+        np = ixp.xp
         ind_list = _index_to_list_array_api(ind)
-        xp = arr.__array_namespace__()
         known_axes_lengths = {**axis_sizes}
 
         # step 0. reshape arr to [(b t) (c)]
-        arr_2d = self.array_composition.compose_arapi(arr, known_axes_lengths=known_axes_lengths)
+        arr_2d = self.array_composition.compose_ixp(ixp, arr, known_axes_lengths=known_axes_lengths)
 
         # step 1. build first index of shape [b t s replica] -> (b h w)
         # some output axes may be present only in ind_other_axes
@@ -426,8 +460,8 @@ class ScatterFormula:
             else:
                 assert axis_len == known_axes_lengths[axis]
 
-        first_flat_index = compute_full_index(
-            xp,
+        first_flat_index = compute_full_index_ixp(
+            ixp,
             ind=ind_list,
             indexing_axes=self.parsed_pattern.ind_axes_names,
             indexer_other_axes_names=self.parsed_pattern.ind_other_axes_names,
@@ -436,21 +470,29 @@ class ScatterFormula:
         )
 
         # step 2. reshape flat index into [(s replica) (b t)] -> (b h w)
-        flat_index_2d = self.index_composition.compose_arapi(first_flat_index, known_axes_lengths=known_axes_lengths)
+        flat_index_2d = self.index_composition.compose_ixp(ixp, first_flat_index, known_axes_lengths=known_axes_lengths)
 
         # step 3. creation of result in composed_shape
         cshape = self.result_composition.composed_shape
         shape = [_prod(known_axes_lengths[var] for var in group) for group in cshape]
-        result = xp.zeros(shape, dtype=arr.dtype, device=arr.device)
+        dtype = arr.dtype
+
+        import numpy as np
 
         # step 4. aggregation
-        # += does not work
-        # result._array[flat_index_2d._array, ...] += arr_2d._array
-        for i in range(flat_index_2d.shape[0]):
-            for j in range(flat_index_2d.shape[1]):
-                result[flat_index_2d[i, j], :] += arr_2d[j, :]
+        if self.aggregation == "sum":
+            result = np.zeros(shape, dtype=dtype)
+            np.add.at(result, flat_index_2d, arr_2d)
+        elif self.aggregation == "max":
+            result = np.full(shape, fill_value=-np.inf, dtype=dtype)
+            np.maximum.at(result, flat_index_2d, arr_2d)
+        elif self.aggregation == "min":
+            result = np.full(shape, fill_value=np.inf, dtype=dtype)
+            np.minimum.at(result, flat_index_2d, arr_2d)
+        else:
+            raise NotImplementedError(self.aggregation)
 
-        return self.result_composition.decompose_arapi(result, known_axes_lengths=known_axes_lengths)
+        return self.result_composition.decompose_ixp(ixp, result, known_axes_lengths=known_axes_lengths)
 
 
 class GatherScatterFormula:
@@ -505,13 +547,14 @@ class GatherScatterFormula:
             composed_shape=[self.index2_walks, self.result_and_array_axes],
         )
 
-    def apply_to_array_api(self, arr: T, ind: Union[T, List[T]], axis_sizes: dict[str, int]):
+    def apply_to_numpy(self, ixp: IXP, arr: T, ind: Union[T, List[T]], axis_sizes: dict[str, int]):
+        import numpy as np
+
         ind_list = _index_to_list_array_api(ind)
-        xp = arr.__array_namespace__()
         known_axes_lengths = {**axis_sizes}
 
         # step 0. reshape arr to [(b h w) (c)]
-        arr_2d = self.array_composition.compose_arapi(arr, known_axes_lengths=known_axes_lengths)
+        arr_2d = self.array_composition.compose_ixp(ixp, arr, known_axes_lengths=known_axes_lengths)
 
         # step 1. build first index of shape [b t order] -> (b h w)
         # some output axes may be present only in ind_other_axes
@@ -522,8 +565,8 @@ class GatherScatterFormula:
             else:
                 assert axis_len == known_axes_lengths[axis]
 
-        first_flat_index = compute_full_index(
-            xp,
+        first_flat_index = compute_full_index_ixp(
+            ixp,
             ind=ind_list,
             indexing_axes=self.parsed_pattern.ind_axes_names,
             indexer_other_axes_names=self.parsed_pattern.ind_other_axes_names,
@@ -531,13 +574,12 @@ class GatherScatterFormula:
             known_axes_sizes=known_axes_lengths,
         )
         # step 2. and take elements into [(b t order) (c)]
-        # taken_2d = xp.take(arr_2d, xp.flatten(first_flat_index))
-        taken_2d = xp.stack([arr_2d[i, ...] for i in xp.reshape(first_flat_index, (-1,))], axis=0)
+        taken_2d = np.take(arr_2d, first_flat_index.flatten(), axis=0)
 
         # step 3. build second index of shape [b t order] -> (b t h w2), put elements into [(b t h w2) (c)]
         flat_index_axes = self.index2_walks
-        second_flat_index = compute_full_index(
-            xp,
+        second_flat_index = compute_full_index_ixp(
+            ixp,
             ind=ind_list,
             indexing_axes=self.parsed_pattern.ind_axes_names,
             indexer_other_axes_names=self.parsed_pattern.ind_other_axes_names,
@@ -549,13 +591,17 @@ class GatherScatterFormula:
         # output would be [(b t h w2) (c)]
         first_axis = _prod(known_axes_lengths[axis] for axis in flat_index_axes)
 
-        result_2d = xp.zeros([first_axis, taken_2d.shape[1]], dtype=arr.dtype)
-        # doing indexing one-by-one
-        for i, index in enumerate(xp.reshape(second_flat_index, (-1,))):
-            result_2d[index, ...] += taken_2d[i, ...]
+        dtype = arr.dtype
+
+        if self.aggregation == "sum":
+            result_2d = ixp.xp.zeros([first_axis, taken_2d.shape[1]], dtype=dtype)
+            np.add.at(result_2d, second_flat_index.flatten(), taken_2d)
+        else:
+            # TODO
+            raise NotImplementedError()
 
         # step 5
-        return self.result_decomposition.decompose_arapi(result_2d, known_axes_lengths=known_axes_lengths)
+        return self.result_decomposition.decompose_ixp(ixp, result_2d, known_axes_lengths=known_axes_lengths)
 
 
 class ArgFindFormula:
@@ -588,9 +634,9 @@ class ArgFindFormula:
         self.transposition += [self.input_axes.index(axis) for axis in self.indexing_axes[::-1]]
         self.is_max: bool = is_max
 
-    def apply_to_array_api(self, arr):
-        xp = arr.__array_namespace__()
-        arr = xp.permute_dims(arr, self.transposition)
+    def apply_to_ixp(self, ixp: IXP, arr):
+        arr = ixp.permute_dims(arr, self.transposition)
+        xp = ixp.xp
 
         reduced_shape = arr.shape[len(self.indexing_other_axes) :]
         result_shape = arr.shape[: len(self.indexing_other_axes)]
@@ -654,9 +700,9 @@ class ArgsortFormula:
             else:
                 self.transposition.append(self.input_axes.index(axis))
 
-    def apply_to_array_api(self, arr):
-        xp = arr.__array_namespace__()
-        arr = xp.permute_dims(arr, self.transposition)
+    def apply_to_ixp(self, ixp: IXP, arr):
+        xp = ixp.xp
+        arr = ixp.permute_dims(arr, self.transposition)
         _l = self.position_of_order_axis
         _r = self.position_of_order_axis + len(self.indexing_axes)
         reduced_shape = arr.shape[_l:_r]
