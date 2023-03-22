@@ -83,15 +83,9 @@ class CompositionDecomposition:
 
         if self.needs_reshape:
             x = ixp.xp.reshape(x, tuple(flat_shape))
-        else:
-            # will be removed
-            assert x.shape == tuple(
-                flat_shape
-            ), f"shapes: {x.shape=} {flat_shape=} {self.composed_shape} {self.decomposed_shape}"
         if self.needs_transposition:
-            return ixp.permute_dims(x, self.decompose_transposition)
-        else:
-            return x
+            x = ixp.permute_dims(x, self.decompose_transposition)
+        return x
 
     def compose_ixp(self, ixp: IXP, x: T, known_axes_lengths: dict[str, int]) -> T:
         for axis_len, axis_name in zip(x.shape, self.decomposed_shape, strict=True):
