@@ -17,7 +17,8 @@ classifiers = [
     'License :: OSI Approved :: MIT License',
 ]
 dependencies = [
-    # no run-time or installation-time dependencies
+    # no run-time dependencies,
+    # installation-time dependency is hatch
 ]
 dynamic = ["version"]
 authors = [{ name = 'Alex Rogozhnikov' }]
@@ -74,7 +75,7 @@ deploy_test = "hatch build --clean && hatch publish -r test"
 deploy = "hatch build --clean && hatch publish"
 
 [tool.hatch.envs.testing]
-dependencies = ['numpy']
+dependencies = ['numpy', 'jax', 'jaxlib', 'pytest']
 
 [tool.hatch.envs.testing.scripts]
 # hatch run testing:test
