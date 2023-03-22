@@ -1,12 +1,8 @@
 from typing import Any
 
-from verboseindex.indexing import _parse_indexing_part, _parse_space_separated_dimensions, arange_at_position
+from verboseindex._core import IXP, _index_to_list_array_api, _parse_indexing_part, _parse_space_separated_dimensions
 
 Array = Any
-
-
-def arange_at(xp, n_axes, axis, axis_len):
-    return arange_at_position(xp, n_axes, axis, axis_len, device=None)
 
 
 def pseudo_random_tensor(xp, shape: list[int]):
@@ -18,7 +14,7 @@ def pseudo_random_tensor(xp, shape: list[int]):
     return xp.reshape(values, shape)
 
 
-def enumerate_indexer(xp, indexer_pattern: str, indexer: Array, sizes: dict[str, int]) -> dict[str, Array]:
+def enumerate_indexer(ixp: IXP, indexer_pattern: str, indexer: Array, sizes: dict[str, int]) -> dict[str, Array]:
     """returns a dictionary with 1-dim arrays"""
     index_axes, index_other_axes = _parse_indexing_part(indexer_pattern)
     expected_shape = [indexer.shape[0]] + [sizes[axis] for axis in index_other_axes]
@@ -26,10 +22,14 @@ def enumerate_indexer(xp, indexer_pattern: str, indexer: Array, sizes: dict[str,
     _template = indexer[0, ...] * 0
     result = {}
     for i, axis in enumerate(index_axes):
-        result[axis] = xp.reshape(indexer[i, ...], (-1,))
+        result[axis] = ixp.xp.reshape(indexer[i, ...], (-1,))
     for j, axis in enumerate(index_other_axes):
-        result[axis] = xp.reshape(
-            _template + arange_at(xp, n_axes=len(index_other_axes), axis=j, axis_len=sizes[axis]), (-1,)
+        result[axis] = ixp.xp.reshape(
+            _template
+            + ixp.arange_at_position(
+                n_axes=len(index_other_axes), axis=j, axis_len=sizes[axis], array_to_copy_device_from=_template
+            ),
+            (-1,),
         )
 
     return result
@@ -71,3 +71,17 @@ def range_of_shape(*shape: int, xp):
 
 def flatten(xp, x):
     return xp.reshape(x, (-1,))
+
+
+def compose_index(indexers, shapes: list):
+    indexers = _index_to_list_array_api(indexers)
+
+    result = 0
+    for indexer, axis_len in zip(indexers, shapes, strict=True):
+        result = result * axis_len + indexer
+    return result
+
+
+def _enum_1d(arr):
+    for i in range(arr.shape[0]):
+        yield i, int(arr[i, ...])
