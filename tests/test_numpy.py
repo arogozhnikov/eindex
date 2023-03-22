@@ -1,24 +1,17 @@
 from typing import TypeVar
 
-from verboseindex.indexing import (
-    CompositionDecomposition,
-    _index_to_list_array_api,
-    argmax,
-    argmin,
-    argsort,
-    einindex,
-    gather,
-    gather_scatter,
-    scatter,
-)
+import numpy as np
+
+from verboseindex._core import CompositionDecomposition
+from verboseindex.numpy import argmax, argmin, argsort, einindex, gather, gather_scatter, numpy_ixp, scatter
 
 from .utils import (
-    arange_at,
+    _enum_1d,
+    compose_index,
     enumerate_indexer,
     flatten,
     generate_array,
     generate_indexer,
-    pseudo_random_tensor,
     range_of_shape,
     to_flat_index,
 )
@@ -26,39 +19,41 @@ from .utils import (
 T = TypeVar("T")
 
 
+def arange_at_position(xp, n_axes, axis, axis_len):
+    x = xp.arange(axis_len, dtype=xp.int64)
+    shape = [1] * n_axes
+    shape[axis] = axis_len
+    x = xp.reshape(x, shape)
+    return x
+
+
+def arange_at(xp, n_axes, axis, axis_len):
+    return arange_at_position(xp, n_axes, axis, axis_len)
+
+
+def pseudo_random_tensor(_, shape):
+    from numpy.random import randint
+
+    return randint(size=shape, low=0, high=10000)
+
+
 # TODO tests for inf, +inf, -inf, nan?
 
 
-def compose_index(indexers, shapes: list):
-    indexers = _index_to_list_array_api(indexers)
-
-    result = 0
-    for indexer, axis_len in zip(indexers, shapes, strict=True):
-        result = result * axis_len + indexer
-    return result
-
-
-def _enum_1d(arr):
-    for i in range(arr.shape[0]):
-        yield i, int(arr[i, ...])
-
-
 def test_composition_and_decomposition():
-    import numpy.array_api as np
-
     x = range_of_shape(2, 3, 5, 7, xp=np)
     comp = CompositionDecomposition(
         decomposed_shape=["a", "b", "c", "d"],
         composed_shape=[["a", "b"], ["c", "d"]],
     )
-    x_composed = comp.compose_arapi(x, known_axes_lengths={})
+    x_composed = comp.compose_ixp(numpy_ixp, x, known_axes_lengths={})
     assert x_composed.shape == (2 * 3, 5 * 7)
     assert np.all(x_composed == np.reshape(x, (2 * 3, 5 * 7)))
 
     y = CompositionDecomposition(
         decomposed_shape=["a", "b", "c", "d"],
         composed_shape=[["a", "b"], [], ["c", "d"], []],
-    ).compose_arapi(x, {})
+    ).compose_ixp(numpy_ixp, x, {})
     assert y.shape == (2 * 3, 1, 5 * 7, 1)
     assert np.all(np.reshape(x, (-1,)) == np.reshape(y, (-1,)))
 
@@ -69,33 +64,33 @@ def test_composition_and_decomposition():
     x = range_of_shape(2, 3, 5, 7, 3, xp=np)
 
     axes = {}
-    y = comp.compose_arapi(x, axes)
+    y = comp.compose_ixp(numpy_ixp, x, axes)
     assert y.shape == (5 * 7, 3, 2 * 3)
-    y_manual = np.reshape(np.permute_dims(x, (2, 3, 1, 0, 4)), y.shape)
+    y_manual = np.reshape(np.transpose(x, (2, 3, 1, 0, 4)), y.shape)
 
     assert np.all(y == y_manual)
-    x2 = comp.decompose_arapi(y, axes)
+    x2 = comp.decompose_ixp(numpy_ixp, y, axes)
     assert np.all(x == x2)
 
 
 def test_simple_indexing():
-    import numpy.array_api as np
-
     # simple 2d test
     arr = pseudo_random_tensor(np, [5, 7])
+
     ind = np.arange(7) % 5
     x = einindex("j <- i j, [i] j", arr, [ind])
     for j, i in _enum_1d(ind):
         assert arr[i, j] == x[j]
 
-    y = einindex("j <- j i, [i] j", np.permute_dims(arr, (1, 0)), [ind])
+    y = einindex("j <- j i, [i] j", np.transpose(arr, (1, 0)), [ind])
     for j, i in _enum_1d(ind):
         assert arr[i, j] == y[j]
 
 
-def test_multidimensional_indexing():
-    import numpy.array_api as np
+test_simple_indexing()
 
+
+def test_multidimensional_indexing():
     B, H, W, C, T = 2, 3, 5, 7, 11
 
     embedding_bhwc = (
@@ -132,8 +127,6 @@ def test_multidimensional_indexing():
 
 
 def test_reverse_indexing():
-    import numpy.array_api as np
-
     C, T, B = 2, 3, 5
     # G = GPU, batch-like varaible
     G = 4
@@ -163,9 +156,11 @@ def test_reverse_indexing():
     assert np.all(result == result_manual)
 
 
-def test_argmax_straight():
-    import numpy.array_api as np
+def check_max_min(x, pattern: str):
+    assert np.allclose(argmax(x, pattern), argmin(-x, pattern))
 
+
+def test_argmax_straight():
     A, B, C, D = 2, 3, 5, 7
     x = pseudo_random_tensor(np, [A, B, C, D])
     # set one maximum for every B, so argmax is unambiguous
@@ -175,13 +170,11 @@ def test_argmax_straight():
     assert x[a, b, c, d] == np.max(x)
     cad = argmax(x, "a b c d -> [c, a, d] b")
     comp = CompositionDecomposition(composed_shape=[["c", "a", "d"], ["b"]], decomposed_shape=["a", "b", "c", "d"])
-    reference = np.argmax(comp.compose_arapi(x, {}), axis=0)
+    reference = np.argmax(comp.compose_ixp(numpy_ixp, x, {}), axis=0)
     assert np.all(reference == compose_index(cad, [C, A, D]))
 
 
 def test_argmax_by_indexing():
-    import numpy.array_api as np
-
     x = np.reshape(np.arange(3 * 4 * 5), (3, 4, 5))
     x[1, 2, 3] = 10000
     reference = np.argmax(x, axis=0)
@@ -204,29 +197,30 @@ def test_argmax_by_indexing():
     ind = argmax(x, "i j k -> [k, i, j]")
     assert np.all(einindex(" <- i j k, [k, i, j]", x, ind) == np.max(x))
 
+    check_max_min(x, "i j k -> [k, i, j]")
+    check_max_min(x, "i j k -> [i, j] k")
+    check_max_min(x, "i j k -> [j, i] k")
+    check_max_min(x, "i j k -> [j] k i")
+
 
 def test_argsort_against_numpy():
-    import numpy.array_api as np
-
     x = np.reshape(np.arange(3 * 4 * 5), (3, 4, 5))
     x[1, 2, 3] = 1000
 
     assert np.all(argsort(x, "i j k -> [i] order j k")[0, ...] == np.argsort(x, axis=0))
-    right = np.permute_dims(np.argsort(x, axis=0), (2, 1, 0))
+    right = np.transpose(np.argsort(x, axis=0), (2, 1, 0))
     assert np.all(argsort(x, "i j k -> [i] k j order")[0, ...] == right)
 
     ind = argsort(x, "i j k -> [k, i, j] order")
     assert np.all(einindex("order <- i j k, [k, i, j] order", x, ind) == np.sort(np.reshape(x, (-1,))))
 
     ind = argsort(x, "i j k -> [k, i] order j")
-    reference = np.permute_dims(x, (0, 2, 1))
+    reference = np.transpose(x, (0, 2, 1))
     reference = np.reshape(reference, (-1, reference.shape[-1]))
     assert np.all(einindex("order j <- i j k, [k, i] order j", x, ind) == np.sort(reference, axis=0))
 
 
 def test_gather_scatter_runs():
-    import numpy.array_api as np
-
     x = np.reshape(np.arange(3 * 4 * 5), (3, 4, 5))
     x[1, 2, 3] = 1000
     indices = np.arange(5)
@@ -237,8 +231,6 @@ def test_gather_scatter_runs():
 
 
 def test_index():
-    import numpy.array_api as np
-
     sizes = dict(
         a=2,
         b=3,
@@ -253,7 +245,7 @@ def test_index():
     array = generate_array(np, "a b c d", sizes=sizes)
     indexer = generate_indexer(np, "[a, c] d f g", sizes=sizes)
     result = einindex("g f d b <- a b c d, [a, c] d f g", array, indexer)
-    indexer_as_dict = enumerate_indexer(np, "[a, c] d f g", indexer=indexer, sizes=sizes)
+    indexer_as_dict = enumerate_indexer(numpy_ixp, "[a, c] d f g", indexer=indexer, sizes=sizes)
 
     for b in range(sizes["b"]):
         flat_index_arr = to_flat_index("a b c d", {**indexer_as_dict, "b": b}, sizes=sizes)
@@ -267,8 +259,6 @@ def test_index():
 
 
 def test_scatter():
-    import numpy.array_api as np
-
     sizes = dict(
         b=3,
         c=5,
@@ -287,7 +277,7 @@ def test_scatter():
     result = scatter(
         f"{final_pattern} <- {array_pattern}, {index_pattern} ", array, indexer, f=sizes["f"], h=sizes["h"]
     )
-    indexer_as_dict = enumerate_indexer(np, index_pattern, indexer=indexer, sizes=sizes)
+    indexer_as_dict = enumerate_indexer(numpy_ixp, index_pattern, indexer=indexer, sizes=sizes)
 
     array_flat = flatten(np, array)
     result_flat = flatten(np, result)
@@ -303,16 +293,12 @@ def test_scatter():
 
 
 def test_gather():
-    import numpy.array_api as np
-
     sizes = dict(
         a=2,
         b=3,
         c=5,
         d=7,
-        e=2,
         f=3,
-        g=4,
         h=5,
         r=3,
     )
@@ -323,7 +309,7 @@ def test_gather():
     array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
     indexer = generate_indexer(np, index_pattern, sizes=sizes)
     result = gather(f"{final_pattern} <- {array_pattern}, {index_pattern} ", array, indexer)
-    indexer_as_dict = enumerate_indexer(np, index_pattern, indexer=indexer, sizes=sizes)
+    indexer_as_dict = enumerate_indexer(numpy_ixp, index_pattern, indexer=indexer, sizes=sizes)
 
     array_flat = flatten(np, array)
     result_flat = flatten(np, result)
@@ -339,8 +325,6 @@ def test_gather():
 
 
 def test_gather_scatter():
-    import numpy.array_api as np
-
     sizes = dict(
         b=3,
         c=5,
@@ -357,7 +341,7 @@ def test_gather_scatter():
     array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
     indexer = generate_indexer(np, index_pattern, sizes=sizes)
     result = gather_scatter(f"{final_pattern} <- {array_pattern}, {index_pattern} ", array, indexer, i3=sizes["i3"])
-    indexer_as_dict = enumerate_indexer(np, index_pattern, indexer=indexer, sizes=sizes)
+    indexer_as_dict = enumerate_indexer(numpy_ixp, index_pattern, indexer=indexer, sizes=sizes)
 
     array_flat = flatten(np, array)
     result_flat = flatten(np, result)
