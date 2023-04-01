@@ -245,6 +245,8 @@ def test_index():
     array = generate_array(np, "a b c d", sizes=sizes)
     indexer = generate_indexer(np, "[a, c] d f g", sizes=sizes)
     result = einindex("g f d b <- a b c d, [a, c] d f g", array, indexer)
+    result2 = gather("g f d b <- a b c d, [a, c] d f g", array, indexer)
+    assert np.allclose(result, result2)
     indexer_as_dict = enumerate_indexer(numpy_ixp, "[a, c] d f g", indexer=indexer, sizes=sizes)
 
     for b in range(sizes["b"]):
@@ -354,3 +356,7 @@ def test_gather_scatter():
             result_flat[ir] -= array_flat[ia]
 
     assert np.max(abs(result_flat)) == 0
+
+
+# TODO add tests for different aggregations in gather/scatter/gatherscatter
+# TODO test gatherscatter with combination of scatter and gather
