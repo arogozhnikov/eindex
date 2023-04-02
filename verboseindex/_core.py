@@ -1,7 +1,7 @@
 """
 Core formulas for transformations
 """
-from typing import Any, Iterable, List, Literal, Tuple, TypeVar, Union
+from typing import Any, Iterable, List, Literal, Optional, Tuple, TypeVar, Union
 
 from . import VerboseIndexError
 from ._parsing import ParsedPattern, _parse_indexing_part, _parse_space_separated_dimensions
@@ -9,16 +9,13 @@ from ._parsing import ParsedPattern, _parse_indexing_part, _parse_space_separate
 T = TypeVar("T")
 
 
-Aggregation = Literal["min", "max", "sum", "mean", "std", "logsumexp"]
-
-# conventions: _aapi is array api
+Aggregation = Literal["min", "max", "sum", "mean"]  # "std", "logsumexp"
 
 # which functions do we use?
 # shape/ndim, reshape, transpose
 # xp.zeros (create an empty index of correct shape, or create result of correct shape)
 # 2d-indexing  over the first axis x_ij[i_k] -> y_kj                   # gather
-# 2d-reduction over the first axis x_ij[i_k] += y_kj -> result is x_ij # gather-scatter
-# multi-reduction: x_ij[i_rk] += y_kj,                                 # scatter
+# multi-reduction: x_ij[i_rk] += y_kj                                  # scatter
 # the last two are not a part of array api standard
 
 
@@ -74,7 +71,10 @@ class CompositionDecomposition:
                         raise VerboseIndexError("Can't infer the size")
 
             if unknown_axis_name is None:
-                assert shape[i] == known_sizes_prod
+                if not (shape[i] == known_sizes_prod):
+                    raise VerboseIndexError(
+                        f"Composed axis {axis_group} is expected to be {known_sizes_prod}, found: {shape[i]} "
+                    )
             else:
                 known_axes_lengths[unknown_axis_name] = shape[i] // known_sizes_prod
 
@@ -90,7 +90,10 @@ class CompositionDecomposition:
     def compose_ixp(self, ixp: IXP, x: T, known_axes_lengths: dict[str, int]) -> T:
         for axis_len, axis_name in zip(x.shape, self.decomposed_shape, strict=True):
             if axis_name in known_axes_lengths:
-                assert known_axes_lengths[axis_name] == axis_len
+                if not (known_axes_lengths[axis_name] == axis_len):
+                    raise VerboseIndexError(
+                        f"Axis '{axis_name}' expected size: {known_axes_lengths[axis_name]}, found: {axis_len}"
+                    )
             else:
                 known_axes_lengths[axis_name] = axis_len
 
@@ -140,19 +143,30 @@ def compute_full_index_ixp(
     flat_index_over: list[str],
     known_axes_sizes: dict,
 ) -> Any:
-    assert len(ind) == len(indexing_axes)
+    if len(ind) != len(indexing_axes):
+        raise VerboseIndexError(f"Number of indexers {len(ind)},  expected {len(indexing_axes)}")
+
     for indexer in ind:
-        assert len(indexer.shape) == len(indexer_other_axes_names)
+        # we only require indices to have the same dimensionality and being co-broadcastable
+        expected_dimensionality = len(indexer_other_axes_names)
+        indexer_dimensionality = len(indexer.shape)
+        if expected_dimensionality != indexer_dimensionality:
+            raise VerboseIndexError(
+                f"All indexers should have {expected_dimensionality}, but found one with {indexer_dimensionality} "
+            )
 
     flat_index = 0
     shift = 1
     # NB: traversing in reverse direction
     # this implementation (compared to simpler one) is more 'parallelizable' as sum of integers is associative
     for axis_name in flat_index_over[::-1]:
+        if axis_name not in known_axes_sizes:
+            raise VerboseIndexError(f"Size of axis {axis_name} was not inferred and should be specified")
+        axis_len = known_axes_sizes[axis_name]
         if axis_name in indexing_axes:
             indexer = ind[indexing_axes.index(axis_name)]
-            flat_index = flat_index + shift * (indexer % known_axes_sizes[axis_name])
-            shift *= known_axes_sizes[axis_name]
+            flat_index = flat_index + shift * (indexer % axis_len)
+            shift *= axis_len
         else:
             axis_id = indexer_other_axes_names.index(axis_name)
             flat_index = (
@@ -160,12 +174,18 @@ def compute_full_index_ixp(
                 + ixp.arange_at_position(
                     len(indexer_other_axes_names),
                     axis=axis_id,
-                    axis_len=known_axes_sizes[axis_name],
+                    axis_len=axis_len,
                     array_to_copy_device_from=ind[0],
                 )
                 * shift
             )
             shift *= known_axes_sizes[axis_name]
+
+    # here is the tricky part: we allow ind elements to have different shapes,
+    # and we also allow them to be not used (_underscored indexers)
+    # which means that result of arithmetic operations can still have some dimensions unexpanded
+    broadcasted_shape = _broadcast_shapes([x.shape for x in ind])
+    flat_index = ixp.xp.broadcast_to(flat_index, broadcasted_shape)
 
     return flat_index
 
@@ -245,11 +265,12 @@ class IndexFormula:
         full_index = self.index_composition.compose_ixp(ixp, full_index, known_axes_sizes)
 
         # step 4. indexing
-        # python array api has xp.take, but it is not implemented anywhere
         xp = ixp.xp
         if hasattr(xp, "take"):
             result_2d = xp.take(arr_2d, full_index, axis=0)
         else:
+            # python array api has xp.take, but it is not implemented anywhere
+            # so there is a veeery slow workaround
             result_2d = xp.stack([arr_2d[full_index[i], :] for i in range(full_index.shape[0])])
 
         # step 5. reshape result to correct form
@@ -288,7 +309,7 @@ class IndexFormula:
 
 
 class GatherFormula:
-    def __init__(self, pattern: str, aggregation: Aggregation) -> None:
+    def __init__(self, pattern: str, aggregation: Optional[Aggregation]) -> None:
         """
         Example in which one aggregates the data
         'b t c <- b H W s c, [H, W] b t s replica'
@@ -315,8 +336,12 @@ class GatherFormula:
             elif presence == (True, True, False, False):
                 self.result_and_array_axes.append(axis)
             elif presence == (False, True, False, True):
+                if aggregation is None:
+                    raise VerboseIndexError(f"Axis '{axis}' can't be reduced as no aggregation set: {pattern}")
                 self.array_and_index_axes.append(axis)
             elif presence == (False, False, False, True):
+                if aggregation is None:
+                    raise VerboseIndexError(f"Axis '{axis}' can't be reduced as no aggregation set: {pattern}")
                 self.index_only_axes.append(axis)
             else:
                 raise VerboseIndexError(f"Axis '{axis}' is used incorrectly in {pattern}")
@@ -342,11 +367,11 @@ class GatherFormula:
             composed_shape=[self.batch_axes + self.result_and_index_axes, self.result_and_array_axes],
         )
 
+    # gather can be applied to array api with xp.take with double reshaping (before and after)
+
     def apply_to_numpy(self, ixp: IXP, arr, ind):
-        assert self.aggregation == "sum"
         known_axes_lengths: dict[str, int] = {}
         ind_list = _index_to_list_array_api(ind)
-        import numpy as np
 
         for indexer in ind_list:
             assert len(indexer.shape) == len(self.parsed_pattern.ind_other_axes_names)
@@ -368,17 +393,21 @@ class GatherFormula:
         full_index_2d = self.index_composition.compose_ixp(ixp, full_index_2d, known_axes_lengths)
 
         # step 4. indexing
-        cshape = self.result_composition.composed_shape
-        shape = [_prod(known_axes_lengths[var] for var in group) for group in cshape]
-        result_2d = np.zeros(shape, dtype=arr.dtype)  # no device
-
-        for i in range(full_index_2d.shape[0]):
-            for j in range(full_index_2d.shape[1]):
-                result_2d[j, :] += arr_2d[full_index_2d[i, j], :]
-
-        if self.aggregation == "sum":
-            result_2d_new = arr_2d[full_index_2d].sum(axis=0)
-            assert np.allclose(result_2d, result_2d_new)
+        # cshape = self.result_composition.composed_shape
+        # shape = [_prod(known_axes_lengths[var] for var in group) for group in cshape]
+        if self.aggregation is None:
+            assert full_index_2d.shape[0] == 1
+            result_2d = arr_2d[full_index_2d[0]]
+        elif self.aggregation == "sum":
+            result_2d = arr_2d[full_index_2d].sum(axis=0)
+        elif self.aggregation == "min":
+            result_2d = arr_2d[full_index_2d].min(axis=0)
+        elif self.aggregation == "max":
+            result_2d = arr_2d[full_index_2d].max(axis=0)
+        elif self.aggregation == "mean":
+            result_2d = arr_2d[full_index_2d].mean(axis=0)
+        else:
+            raise NotImplementedError(f"Reduction {self.aggregation} is not available")
 
         # step 5. reshape result to correct form
         return self.result_composition.decompose_ixp(ixp, result_2d, known_axes_lengths)
@@ -438,7 +467,6 @@ class ScatterFormula:
         )
 
     def apply_to_numpy(self, ixp: IXP, arr: T, ind: Union[T, List[T]], axis_sizes: dict[str, int]):
-        np = ixp.xp
         ind_list = _index_to_list_array_api(ind)
         known_axes_lengths = {**axis_sizes}
 
@@ -454,7 +482,7 @@ class ScatterFormula:
             else:
                 assert axis_len == known_axes_lengths[axis]
 
-        first_flat_index = compute_full_index_ixp(
+        flat_index = compute_full_index_ixp(
             ixp,
             ind=ind_list,
             indexing_axes=self.parsed_pattern.ind_axes_names,
@@ -464,7 +492,7 @@ class ScatterFormula:
         )
 
         # step 2. reshape flat index into [(s replica) (b t)] -> (b h w)
-        flat_index_2d = self.index_composition.compose_ixp(ixp, first_flat_index, known_axes_lengths=known_axes_lengths)
+        flat_index_2d = self.index_composition.compose_ixp(ixp, flat_index, known_axes_lengths=known_axes_lengths)
 
         # step 3. creation of result in composed_shape
         cshape = self.result_composition.composed_shape
@@ -483,6 +511,15 @@ class ScatterFormula:
         elif self.aggregation == "min":
             result = np.full(shape, fill_value=np.inf, dtype=dtype)
             np.minimum.at(result, flat_index_2d, arr_2d)
+        elif self.aggregation == "mean":
+            # mean is not ufunc and can't be just accumulated
+            assert dtype in [np.float16, np.float32, np.float64], "mean reduction supported only for float tensors"
+            nom = np.zeros(shape, dtype=dtype)
+            np.add.at(nom, flat_index_2d, arr_2d)
+            denom = np.zeros(shape, dtype=np.int64)
+            np.add.at(denom, flat_index_2d, 1)
+            result = nom / denom
+            assert nom.shape == result.shape
         else:
             raise NotImplementedError(self.aggregation)
 
@@ -588,11 +625,24 @@ class GatherScatterFormula:
         dtype = arr.dtype
 
         if self.aggregation == "sum":
-            result_2d = ixp.xp.zeros([first_axis, taken_2d.shape[1]], dtype=dtype)
+            result_2d = np.zeros([first_axis, taken_2d.shape[1]], dtype=dtype)
             np.add.at(result_2d, second_flat_index.flatten(), taken_2d)
+        elif self.aggregation == "max":
+            result_2d = np.full([first_axis, taken_2d.shape[1]], fill_value=-np.inf, dtype=dtype)
+            np.maximum.at(result_2d, second_flat_index.flatten(), taken_2d)
+        elif self.aggregation == "min":
+            result_2d = np.full([first_axis, taken_2d.shape[1]], fill_value=np.inf, dtype=dtype)
+            np.minimum.at(result_2d, second_flat_index.flatten(), taken_2d)
+        elif self.aggregation == "mean":
+            assert dtype in [np.float16, np.float32, np.float64], "Mean-reduction supported only for floating dtypes"
+            result_2d_nom = np.zeros([first_axis, taken_2d.shape[1]], dtype=dtype)
+            np.add.at(result_2d_nom, second_flat_index.flatten(), taken_2d)
+            result_2d_denom = np.zeros([first_axis, taken_2d.shape[1]], dtype=dtype)
+            np.add.at(result_2d_denom, second_flat_index.flatten(), 1)
+            result_2d = result_2d_nom / result_2d_denom
+            assert result_2d.shape == result_2d_nom.shape
         else:
-            # TODO
-            raise NotImplementedError()
+            raise NotImplementedError(f"Unknown reduction: {self.aggregation}")
 
         # step 5
         return self.result_decomposition.decompose_ixp(ixp, result_2d, known_axes_lengths=known_axes_lengths)
