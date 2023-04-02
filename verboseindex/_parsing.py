@@ -5,11 +5,33 @@ from . import VerboseIndexError
 
 Aggregation = Literal["set", "min", "max", "sum", "mean", "std", "logsumexp"]
 
+forbidden_names = {
+    "mask",
+    "mask0",
+    "mask1",
+    "mask2",
+    "in",
+    "isin",
+    "min",
+    "max",
+    "mean",
+}
 
-def _verify_axis_name(name: str) -> Tuple[bool, str]:
+# discouraged_names = {
+#     "class",
+#     "def",
+#     "if",
+#     "else",
+# }
+
+
+def _verify_axis_name(name: str, indexer=False) -> Tuple[bool, str]:
     if not str.isidentifier(name):
         return False, f"Axis name {name} is not a valid python identifier"
-    elif name[0] == "_" or name[-1] == "_":
+    if name[-1] == "_":
+        return False, f"Axis name {name} should should not end with underscore"
+    if name[0] == "_" and not indexer:
+        # indexers can start from underscore
         return False, f"Axis name {name} should should not start or end with underscore"
     else:
         return True, ""
@@ -45,7 +67,7 @@ def _parse_comma_separated_dimensions(dims: str) -> List[str]:
     for axis in axes_names:
         if " " in axis:
             raise VerboseIndexError(f"Seems you forgot comma in indexing: '{axis}'")
-        is_valid, reason = _verify_axis_name(axis)
+        is_valid, reason = _verify_axis_name(axis, indexer=True)
         if not is_valid:
             raise VerboseIndexError(reason)
     return axes_names
@@ -104,9 +126,19 @@ class ParsedPattern:
             *self.ind_other_axes_names,
         }
         for axis in list(all_axes):
-            yield axis, (
+            presence: Presence = (
                 axis in self.res_axes_names,
                 axis in self.arr_axes_names,
                 axis in self.ind_axes_names,
                 axis in self.ind_other_axes_names,
             )
+            if axis.startswith("_"):
+                # unused indexers (and only them) start with _underscore
+                if presence == (False, False, True, False):
+                    pass
+                else:
+                    raise VerboseIndexError(
+                        f"Axis {axis} in {self.pattern}: axes that start with underscore should appear only once in indexing"
+                    )
+            else:
+                yield axis, presence
