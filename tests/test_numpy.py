@@ -1,9 +1,9 @@
-from typing import TypeVar, List, Tuple, Any
+from typing import Any, List, Tuple, TypeVar
 
 import numpy as np
 
 from verboseindex._core import CompositionDecomposition
-from verboseindex.numpy import argmax, argmin, argsort, einindex, gather, gather_scatter, _numpy_ixp, scatter
+from verboseindex.numpy import _numpy_ixp, argmax, argmin, argsort, einindex, gather, gather_scatter, scatter
 
 from .utils import (
     _enum_1d,

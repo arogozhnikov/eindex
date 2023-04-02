@@ -1,7 +1,7 @@
 from typing import TypeVar
 
 from verboseindex._core import CompositionDecomposition
-from verboseindex.array_api import ArrayApiIXP, argmax, argmin, argsort, einindex
+from verboseindex.array_api import _ArrayApiIXP, argmax, argmin, argsort, einindex
 
 # gather,
 # gather_scatter,
@@ -28,7 +28,7 @@ T = TypeVar("T")
 def test_composition_and_decomposition():
     import numpy.array_api as xp
 
-    ixp = ArrayApiIXP(xp)
+    ixp = _ArrayApiIXP(xp)
 
     x = range_of_shape(2, 3, 5, 7, xp=xp)
     comp = CompositionDecomposition(
@@ -80,7 +80,7 @@ def test_simple_indexing():
 def test_multidimensional_indexing():
     import numpy.array_api as xp
 
-    ixp = ArrayApiIXP(xp)
+    ixp = _ArrayApiIXP(xp)
 
     B, H, W, C, T = 2, 3, 5, 7, 11
     hindices_bt = pseudo_random_tensor(xp, [B, T]) % H
@@ -120,7 +120,7 @@ def test_multidimensional_indexing():
 def test_reverse_indexing():
     import numpy.array_api as xp
 
-    ixp = ArrayApiIXP(xp)
+    ixp = _ArrayApiIXP(xp)
 
     C, T, B = 2, 3, 5
     # G = GPU, batch-like varaible
@@ -161,7 +161,7 @@ def check_max_min(x, pattern: str):
 def test_argmax_straight():
     import numpy.array_api as xp
 
-    ixp = ArrayApiIXP(xp)
+    ixp = _ArrayApiIXP(xp)
 
     A, B, C, D = 2, 3, 5, 7
     x = pseudo_random_tensor(xp, [A, B, C, D])
@@ -229,7 +229,7 @@ def test_argsort_against_numpy():
 def test_index():
     import numpy.array_api as xp
 
-    ixp = ArrayApiIXP(xp)
+    ixp = _ArrayApiIXP(xp)
 
     sizes = dict(
         a=2,
