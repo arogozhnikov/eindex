@@ -1,6 +1,9 @@
 from typing import Any, List, Protocol, TypeVar, Union
 
-from ._core import IXP, ArgmaxFormula, ArgminFormula, ArgsortFormula, IndexFormula
+from . import _core
+
+
+__all__ = ["argmin", "argmax", "argsort", "einindex"]
 
 
 class ArrayProtocol(Protocol):
@@ -12,7 +15,7 @@ class ArrayProtocol(Protocol):
         pass
 
 
-class ArrayApiIXP(IXP):
+class _ArrayApiIXP(_core.IXP):
     def __init__(self, xp) -> None:
         self.xp = xp
 
@@ -32,27 +35,27 @@ Array = TypeVar("Array", bound=ArrayProtocol)
 
 
 def argmax(tensor: Array, pattern: str, /) -> Array:
-    formula = ArgmaxFormula(pattern)
-    ixp = ArrayApiIXP(tensor.__array_namespace__())
+    formula = _core.ArgmaxFormula(pattern)
+    ixp = _ArrayApiIXP(tensor.__array_namespace__())
     return formula.apply_to_ixp(ixp, tensor)
 
 
 def argmin(tensor: Array, pattern: str, /) -> Array:
-    formula = ArgminFormula(pattern)
-    ixp = ArrayApiIXP(tensor.__array_namespace__())
+    formula = _core.ArgminFormula(pattern)
+    ixp = _ArrayApiIXP(tensor.__array_namespace__())
     return formula.apply_to_ixp(ixp, tensor)
 
 
 def argsort(tensor: Array, pattern: str, /) -> Array:
-    formula = ArgsortFormula(pattern)
-    ixp = ArrayApiIXP(tensor.__array_namespace__())
+    formula = _core.ArgsortFormula(pattern)
+    ixp = _ArrayApiIXP(tensor.__array_namespace__())
     return formula.apply_to_ixp(ixp, tensor)
 
 
 def einindex(pattern: str, arr: Array, ind: Union[Array, List[Array]], /):
-    formula = IndexFormula(pattern)
-    ixp = ArrayApiIXP(arr.__array_namespace__())
+    formula = _core.IndexFormula(pattern)
+    ixp = _ArrayApiIXP(arr.__array_namespace__())
     return formula.apply_to_array_api(ixp, arr, ind)
 
 
-# current standard misses API for indexing
+# scatter is not implemented - no corresponding operations in API standard
