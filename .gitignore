@@ -136,3 +136,7 @@ test_notebooks
 
 # mac stuff
 .DS_Store
+
+# Other
+.vscode
+.ruff_cache
