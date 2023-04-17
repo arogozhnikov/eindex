@@ -1,9 +1,9 @@
 from typing import Any, List, Optional, Union
 
 import numpy as np
+
 from . import _core
 from ._core import Aggregation
-
 
 __all__ = ["argmax", "argmin", "argsort", "gather", "scatter", "gather_scatter"]
 

@@ -3,7 +3,7 @@ requires = ["hatchling>=1.10.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "verboseindex"
+name = "eindex"
 description = "A concept of multidimensional indexing for tensors"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -25,13 +25,13 @@ authors = [{ name = 'Alex Rogozhnikov' }]
 
 
 [project.urls]
-Homepage = 'https://github.com/arogozhnikov/verboseindex'
+Homepage = 'https://github.com/arogozhnikov/eindex'
 
 [tool.setuptools]
-packages = ['verboseindex']
+packages = ['eindex']
 
 [tool.hatch.version]
-path = "verboseindex/__init__.py"
+path = "eindex/__init__.py"
 
 [tool.hatch.build.targets.sdist]
 exclude = [
@@ -122,4 +122,4 @@ select = [
 exclude = [".git", "__pycache__", ".venv"]
 
 [tool.ruff.isort]
-known-first-party = ["verboseindex"]
+known-first-party = ["eindex"]

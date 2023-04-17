@@ -2,8 +2,7 @@ from typing import Any, List, Protocol, TypeVar, Union
 
 from . import _core
 
-
-__all__ = ["argmin", "argmax", "argsort", "einindex"]
+__all__ = ["argmin", "argmax", "argsort"]
 
 
 class ArrayProtocol(Protocol):

@@ -3,7 +3,7 @@ Core formulas for transformations
 """
 from typing import Any, Iterable, List, Literal, Optional, Tuple, TypeVar, Union
 
-from . import VerboseIndexError
+from . import EindexError
 from ._parsing import ParsedPattern, _parse_indexing_part, _parse_space_separated_dimensions
 
 T = TypeVar("T")
@@ -68,11 +68,11 @@ class CompositionDecomposition:
                     if unknown_axis_name is None:
                         unknown_axis_name = axis_name
                     else:
-                        raise VerboseIndexError("Can't infer the size")
+                        raise EindexError("Can't infer the size")
 
             if unknown_axis_name is None:
                 if not (shape[i] == known_sizes_prod):
-                    raise VerboseIndexError(
+                    raise EindexError(
                         f"Composed axis {axis_group} is expected to be {known_sizes_prod}, found: {shape[i]} "
                     )
             else:
@@ -91,7 +91,7 @@ class CompositionDecomposition:
         for axis_len, axis_name in zip(x.shape, self.decomposed_shape, strict=True):
             if axis_name in known_axes_lengths:
                 if not (known_axes_lengths[axis_name] == axis_len):
-                    raise VerboseIndexError(
+                    raise EindexError(
                         f"Axis '{axis_name}' expected size: {known_axes_lengths[axis_name]}, found: {axis_len}"
                     )
             else:
@@ -144,14 +144,14 @@ def compute_full_index_ixp(
     known_axes_sizes: dict,
 ) -> Any:
     if len(ind) != len(indexing_axes):
-        raise VerboseIndexError(f"Number of indexers {len(ind)},  expected {len(indexing_axes)}")
+        raise EindexError(f"Number of indexers {len(ind)},  expected {len(indexing_axes)}")
 
     for indexer in ind:
         # we only require indices to have the same dimensionality and being co-broadcastable
         expected_dimensionality = len(indexer_other_axes_names)
         indexer_dimensionality = len(indexer.shape)
         if expected_dimensionality != indexer_dimensionality:
-            raise VerboseIndexError(
+            raise EindexError(
                 f"All indexers should have {expected_dimensionality}, but found one with {indexer_dimensionality} "
             )
 
@@ -161,7 +161,7 @@ def compute_full_index_ixp(
     # this implementation (compared to simpler one) is more 'parallelizable' as sum of integers is associative
     for axis_name in flat_index_over[::-1]:
         if axis_name not in known_axes_sizes:
-            raise VerboseIndexError(f"Size of axis {axis_name} was not inferred and should be specified")
+            raise EindexError(f"Size of axis {axis_name} was not inferred and should be specified")
         axis_len = known_axes_sizes[axis_name]
         if axis_name in indexing_axes:
             indexer = ind[indexing_axes.index(axis_name)]
@@ -206,7 +206,7 @@ class IndexFormula:
             if presence == (False, True, True, False):
                 self.indexer_axes.append(axis)
             elif presence[2]:
-                raise VerboseIndexError(f"Wrong usage of indexer variable '{axis}' in {pattern}")
+                raise EindexError(f"Wrong usage of indexer variable '{axis}' in {pattern}")
             elif presence == (True, True, False, True):
                 self.batch_axes.append(axis)
             elif presence == (True, False, False, True):
@@ -214,7 +214,7 @@ class IndexFormula:
             elif presence == (True, True, False, False):
                 self.result_and_array_axes.append(axis)
             else:
-                raise VerboseIndexError(f"Axis '{axis}' is used incorrectly in {pattern}")
+                raise EindexError(f"Axis '{axis}' is used incorrectly in {pattern}")
 
         # we will not use self.indexer_axes, because we need original order of axes
         assert set(self.indexer_axes) == set(self.pattern_parser.ind_axes_names)
@@ -337,14 +337,14 @@ class GatherFormula:
                 self.result_and_array_axes.append(axis)
             elif presence == (False, True, False, True):
                 if aggregation is None:
-                    raise VerboseIndexError(f"Axis '{axis}' can't be reduced as no aggregation set: {pattern}")
+                    raise EindexError(f"Axis '{axis}' can't be reduced as no aggregation set: {pattern}")
                 self.array_and_index_axes.append(axis)
             elif presence == (False, False, False, True):
                 if aggregation is None:
-                    raise VerboseIndexError(f"Axis '{axis}' can't be reduced as no aggregation set: {pattern}")
+                    raise EindexError(f"Axis '{axis}' can't be reduced as no aggregation set: {pattern}")
                 self.index_only_axes.append(axis)
             else:
-                raise VerboseIndexError(f"Axis '{axis}' is used incorrectly in {pattern}")
+                raise EindexError(f"Axis '{axis}' is used incorrectly in {pattern}")
 
         self.index_walks = self.batch_axes + self.indexer_axes + self.array_and_index_axes
 
@@ -443,7 +443,7 @@ class ScatterFormula:
             elif presence == (False, False, False, True):
                 self.only_index_other_axes.append(axis)
             else:
-                raise VerboseIndexError(f"Axis {axis} is used incorrectly in '{pattern}'")
+                raise EindexError(f"Axis {axis} is used incorrectly in '{pattern}'")
 
         self.index_walks = self.batch_axes + self.output_index_axes + self.output_index_other
 
@@ -560,7 +560,7 @@ class GatherScatterFormula:
             elif presence == (False, False, False, True):
                 self.index_reduced_axes.append(axis)
             else:
-                raise VerboseIndexError(f"Axis {axis} is used incorrectly in '{pattern}'")
+                raise EindexError(f"Axis {axis} is used incorrectly in '{pattern}'")
 
         self.index1_walks = self.batch_axes + self.input_indexer_axes
         self.index2_walks = self.batch_axes + self.result_and_index_axes + self.output_indexer_axes
@@ -659,19 +659,17 @@ class ArgFindFormula:
         self.indexing_axes, self.indexing_other_axes = _parse_indexing_part(right)
 
         if len(self.indexing_axes) == 0:
-            raise VerboseIndexError("At least one indexing axis should be in [...]")
+            raise EindexError("At least one indexing axis should be in [...]")
 
         double_used_axes = set.intersection(set(self.indexing_axes), set(self.indexing_other_axes))
         if double_used_axes:
-            raise VerboseIndexError(f"Some axes were used more than once: {double_used_axes}")
+            raise EindexError(f"Some axes were used more than once: {double_used_axes}")
 
         on_one_side = set.symmetric_difference(
             set(self.input_axes), set.union(set(self.indexing_axes), set(self.indexing_other_axes))
         )
         if on_one_side:
-            raise VerboseIndexError(
-                f"All axes should be present in left and right side, but these are not: {on_one_side}"
-            )
+            raise EindexError(f"All axes should be present in left and right side, but these are not: {on_one_side}")
 
         self.transposition: list[int] = [self.input_axes.index(axis) for axis in self.indexing_other_axes]
         # note: we place indexing axes in reverse order here
@@ -718,22 +716,20 @@ class ArgsortFormula:
         self.input_axes = _parse_space_separated_dimensions(left)
         self.indexing_axes, self.indexing_other_axes = _parse_indexing_part(right)
         if order_axis in self.input_axes:
-            raise VerboseIndexError(f"Special axis {order_axis} should not be in the left part of pattern: {pattern}")
+            raise EindexError(f"Special axis {order_axis} should not be in the left part of pattern: {pattern}")
         if order_axis not in self.indexing_other_axes:
-            raise VerboseIndexError(
-                f"Special axis {order_axis} should be in the result part outside of [...]: {pattern}"
-            )
+            raise EindexError(f"Special axis {order_axis} should be in the result part outside of [...]: {pattern}")
 
         repeated_axes = set.intersection(set(self.indexing_axes), set(self.indexing_other_axes))
         if repeated_axes:
-            raise VerboseIndexError(f"Axes {repeated_axes} were repeated in result part: {pattern} ")
+            raise EindexError(f"Axes {repeated_axes} were repeated in result part: {pattern} ")
 
         difference = set.symmetric_difference(
             {*self.input_axes, order_axis},
             {*self.indexing_axes, *self.indexing_other_axes},
         )
         if difference:
-            raise VerboseIndexError(f"Axes {difference} should be present both in input and result of {pattern}")
+            raise EindexError(f"Axes {difference} should be present both in input and result of {pattern}")
 
         self.transposition: list[int] = []
         self.position_of_order_axis = self.indexing_other_axes.index(order_axis)

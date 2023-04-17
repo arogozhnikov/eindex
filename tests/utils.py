@@ -1,6 +1,6 @@
 from typing import Any
 
-from verboseindex._core import IXP, _index_to_list_array_api, _parse_indexing_part, _parse_space_separated_dimensions
+from eindex._core import IXP, _index_to_list_array_api, _parse_indexing_part, _parse_space_separated_dimensions
 
 Array = Any
 

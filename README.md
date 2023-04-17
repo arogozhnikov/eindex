@@ -1,4 +1,4 @@
-# verboseindex
+# eindex
 
 Multidimensional indexing for tensors
 
@@ -39,7 +39,7 @@ Repo provides two implementation:
 
 ## Development Status
 
-API looks solid, but breaking changes are still possible, so lock the version in your projects (e.g. `verboseindex==0.1.0`)
+API looks solid, but breaking changes are still possible, so lock the version in your projects (e.g. `eindex==0.1.0`)
 
 
 ## Related projects
@@ -60,9 +60,9 @@ Minimization of maintenance costs is critical.
 
 Right ways to contribute:
 
-- next time you deal with multidimensional indexing, do this with verboseindex <br />
-  Worked? -> great - [let us know](https://github.com/arogozhnikov/verboseindex/discussions/new?category=show-and-tell); didn't work or unclear how to implement -> post in [discussions](https://github.com/arogozhnikov/verboseindex/discussions)
-- if you feel you're already fluent in verboseindex, help others
+- next time you deal with multidimensional indexing, do this with eindex <br />
+  Worked? -> great - [let us know](https://github.com/arogozhnikov/eindex/discussions/new?category=show-and-tell); didn't work or unclear how to implement -> post in [discussions](https://github.com/arogozhnikov/eindex/discussions)
+- if you feel you're already fluent in eindex, help others
 - alternative guides/tutorials/video-guides are very welcome
 - If you want to translate tutorial to other language and post it somewhere - welcome 
 

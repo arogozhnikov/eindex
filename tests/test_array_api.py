@@ -1,7 +1,7 @@
 from typing import TypeVar
 
-from verboseindex._core import CompositionDecomposition
-from verboseindex.array_api import _ArrayApiIXP, argmax, argmin, argsort, einindex
+from eindex._core import CompositionDecomposition
+from eindex.array_api import _ArrayApiIXP, argmax, argmin, argsort, einindex
 
 # gather,
 # gather_scatter,
