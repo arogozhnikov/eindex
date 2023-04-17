@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="https://arogozhnikov.github.io/images/eindex/logo-animated.gif" alt="eindex animated logo" />
+</div>
+
 # eindex
 
 Multidimensional indexing for tensors
