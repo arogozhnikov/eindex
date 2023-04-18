@@ -1,8 +1,9 @@
-from typing import Any, List, Protocol, TypeVar, Union
+from typing import Any, List, Optional, Protocol, TypeVar, Union
 
 from . import _core
+from ._core import Aggregation
 
-__all__ = ["argmin", "argmax", "argsort"]
+__all__ = ["argmin", "argmax", "argsort", "gather"]
 
 
 class ArrayProtocol(Protocol):
@@ -57,4 +58,11 @@ def einindex(pattern: str, arr: Array, ind: Union[Array, List[Array]], /):
     return formula.apply_to_array_api(ixp, arr, ind)
 
 
+def gather(pattern: str, arr: Array, ind: Union[Array, List[Array]], aggregation: Optional[Aggregation] = None):
+    formula = _core.GatherFormula(pattern=pattern, aggregation=aggregation)
+    ixp = _ArrayApiIXP(arr.__array_namespace__())
+    return formula.apply_to_array_api(ixp, arr, ind)
+
+
 # scatter is not implemented - no corresponding operations in API standard
+# gather_scatter is not implemented - no corresponding operations in API standard
