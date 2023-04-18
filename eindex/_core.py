@@ -266,12 +266,8 @@ class IndexFormula:
 
         # step 4. indexing
         xp = ixp.xp
-        if hasattr(xp, "take"):
-            result_2d = xp.take(arr_2d, full_index, axis=0)
-        else:
-            # python array api has xp.take, but it is not implemented anywhere
-            # so there is a veeery slow workaround
-            result_2d = xp.stack([arr_2d[full_index[i], :] for i in range(full_index.shape[0])])
+        # xp.take for 1d is implemented in the next version of numpy and cupy.
+        result_2d = xp.take(arr_2d, full_index, axis=0)
 
         # step 5. reshape result to correct form
         return self.result_composition.decompose_ixp(ixp, result_2d, known_axes_sizes)
@@ -367,7 +363,53 @@ class GatherFormula:
             composed_shape=[self.batch_axes + self.result_and_index_axes, self.result_and_array_axes],
         )
 
-    # gather can be applied to array api with xp.take with double reshaping (before and after)
+    def apply_to_array_api(self, ixp: IXP, arr: T, ind: Union[T, List[T]]) -> T:
+        known_axes_sizes: dict[str, int] = {}
+        ind_list = _index_to_list_array_api(ind)
+
+        for indexer in ind_list:
+            assert len(indexer.shape) == len(self.parsed_pattern.ind_other_axes_names)
+
+        # step 1. transpose, reshapes of arr; learn its dimensions
+        arr_2d = self.array_composition.compose_ixp(ixp, arr, known_axes_sizes)
+
+        # step 2. compute shifts and create an actual indexing array
+        full_index_2d = compute_full_index_ixp(
+            ixp,
+            ind=ind_list,
+            indexing_axes=self.parsed_pattern.ind_axes_names,
+            indexer_other_axes_names=self.parsed_pattern.ind_other_axes_names,
+            flat_index_over=self.index_walks,
+            known_axes_sizes=known_axes_sizes,
+        )
+
+        # step 3. Flatten index
+        full_index_2d = self.index_composition.compose_ixp(ixp, full_index_2d, known_axes_sizes)
+
+        # step 4. indexing
+        xp = ixp.xp
+        # xp.take is implemented in numpy 1.25 and cupy
+        # only 1d indexing is supported by xp.take, so we compose dims in index
+        result_squashed = xp.take(arr_2d, xp.reshape(full_index_2d, (-1,)), axis=0)
+        # and decompose dims in result
+        arr_3d = xp.reshape(result_squashed, [*full_index_2d.shape, result_squashed.shape[-1]])
+
+        if self.aggregation is None:
+            assert arr_3d.shape[0] == 1
+            result_2d = arr_3d[0, :, :]
+        elif self.aggregation == "sum":
+            result_2d = xp.sum(arr_3d, axis=0)
+        elif self.aggregation == "min":
+            result_2d = xp.min(arr_3d, axis=0)
+        elif self.aggregation == "max":
+            result_2d = xp.max(arr_3d, axis=0)
+        elif self.aggregation == "mean":
+            result_2d = xp.mean(arr_3d, axis=0)
+        else:
+            raise NotImplementedError(f"Reduction {self.aggregation} is not available")
+
+        # step 5. reshape result to correct form
+        return self.result_composition.decompose_ixp(ixp, result_2d, known_axes_sizes)
 
     def apply_to_numpy(self, ixp: IXP, arr, ind):
         known_axes_lengths: dict[str, int] = {}
