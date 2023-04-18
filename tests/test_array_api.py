@@ -1,14 +1,13 @@
 from typing import TypeVar
 
 from eindex._core import CompositionDecomposition
-from eindex.array_api import _ArrayApiIXP, argmax, argmin, argsort, einindex
+from eindex.array_api import _ArrayApiIXP, argmax, argmin, argsort, einindex, gather
 
-# gather,
 # gather_scatter,
 # scatter,
+
 from .utils import (
     _enum_1d,
-    # arange_at,
     compose_index,
     enumerate_indexer,
     flatten,
@@ -244,7 +243,10 @@ def test_index():
 
     array = generate_array(xp, "a b c d", sizes=sizes)
     indexer = generate_indexer(xp, "[a, c] d f g", sizes=sizes)
-    result = einindex("g f d b <- a b c d, [a, c] d f g", array, indexer)
+    result_einindex = einindex("g f d b <- a b c d, [a, c] d f g", array, indexer)
+    result = gather("g f d b <- a b c d, [a, c] d f g", array, indexer)
+    print(result.shape, flatten(xp, result)[0])
+    print(result_einindex.shape, flatten(xp, result_einindex)[0])
     indexer_as_dict = enumerate_indexer(ixp, "[a, c] d f g", indexer=indexer, sizes=sizes)
 
     for b in range(sizes["b"]):
@@ -255,4 +257,74 @@ def test_index():
         result_flat = flatten(xp, result)
 
         for i, j in zip(flat_index_arr, flat_index_result, strict=True):
-            assert array_flat[i] == result_flat[j]
+            assert array_flat[i] == result_flat[j], ("failed", i, j)
+
+    assert xp.all(result_einindex == result), (result_einindex, result)
+
+
+def test_gather():
+    import numpy.array_api as np
+
+    sizes = dict(
+        a=2,
+        b=3,
+        c=5,
+        d=7,
+        i1=3,
+        i2=5,
+        r=3,
+    )
+
+    final_pattern = "b c d"
+    array_pattern = "b i1 i2 d r"
+    index_pattern = "[i1, i2] c b a r"
+    full_pattern = f"{final_pattern} <- {array_pattern}, {index_pattern}"
+    array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
+    indexer = generate_indexer(np, index_pattern, sizes=sizes)
+    result_gather = gather(full_pattern, array, indexer, aggregation="sum")
+
+    _ixp = _ArrayApiIXP(np)
+    indexer_as_dict = enumerate_indexer(_ixp, index_pattern, indexer=indexer, sizes=sizes)
+
+    array_flat = flatten(np, array)
+    result_flat = flatten(np, result_gather)
+
+    for d in range(sizes["d"]):
+        flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
+        flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
+
+        for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+            result_flat[ir] -= array_flat[ia]
+
+    assert np.max(abs(result_flat)) == 0
+
+    # checking different aggregations
+    array_flat_float = np.astype(array_flat, np.float64)
+
+    for agg_name, agg_func, default_value in [
+        ("sum", lambda a, b: a + b, 0.0),
+        ("min", min, np.inf),
+        ("max", max, -np.inf),
+    ]:
+        result_gather = gather(full_pattern, array, indexer, aggregation=agg_name)
+        result_gather = np.reshape(result_gather, (-1,))
+        result_ref = np.full(shape=tuple(sizes[d] for d in final_pattern.split()), fill_value=default_value)
+        result_ref = np.reshape(result_ref, (-1,))
+        for d in range(sizes["d"]):
+            flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
+            flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
+
+            for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+                result_ref[ir] = agg_func(array_flat_float[ia], result_ref[ir])
+        assert np.all(np.astype(result_ref, np.int64) == result_gather)
+
+    # checking mean aggregation on constant tensor
+    result_mean_const = gather(full_pattern, np.full(array.shape, fill_value=3.0), indexer, aggregation="mean")
+    assert np.all(result_mean_const == 3.0)
+
+    # testing that ratio is constant, as number of elements averaged is the same for every result entry
+    values = np.astype(array**2, np.float64) + 1.0
+    result_mean = gather(full_pattern, values, indexer, aggregation="mean")
+    result__sum = gather(full_pattern, values, indexer, aggregation="sum")
+    ratio = result_mean / result__sum
+    assert np.min(ratio) * 0.99 < np.max(ratio) < np.min(ratio) * 1.01
