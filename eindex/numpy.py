@@ -45,7 +45,7 @@ def argsort(tensor: Array, pattern: str, /) -> Array:
     return formula.apply_to_ixp(_numpy_ixp, tensor)
 
 
-def einindex(pattern: str, arr: Array, ind: Union[Array, List[Array]], /):
+def _einindex(pattern: str, arr: Array, ind: Union[Array, List[Array]], /):
     formula = _core.IndexFormula(pattern)
     return formula.apply_to_numpy(_numpy_ixp, arr, ind)
 

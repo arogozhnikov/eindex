@@ -1,7 +1,7 @@
 from typing import TypeVar
 
 from eindex._core import CompositionDecomposition
-from eindex.array_api import _ArrayApiIXP, argmax, argmin, argsort, einindex, gather
+from eindex.array_api import _ArrayApiIXP, argmax, argmin, argsort, _einindex, gather
 
 # gather_scatter,
 # scatter,
@@ -67,11 +67,11 @@ def test_simple_indexing():
     # simple 2d test
     arr = pseudo_random_tensor(np, [5, 7])
     ind = np.arange(7) % 5
-    x = einindex("j <- i j, [i] j", arr, [ind])
+    x = _einindex("j <- i j, [i] j", arr, [ind])
     for j, i in _enum_1d(ind):
         assert arr[i, j] == x[j]
 
-    y = einindex("j <- j i, [i] j", np.permute_dims(arr, (1, 0)), [ind])
+    y = _einindex("j <- j i, [i] j", np.permute_dims(arr, (1, 0)), [ind])
     for j, i in _enum_1d(ind):
         assert arr[i, j] == y[j]
 
@@ -98,10 +98,10 @@ def test_multidimensional_indexing():
     # goal is to get most suitable token from image for every token in sentence
     # thus for every token in sentence you compute best H and vW
 
-    result = einindex("c t b <- b H W c, [H, W] b t", embedding_bhwc, [hindices_bt, windices_bt])
+    result = _einindex("c t b <- b H W c, [H, W] b t", embedding_bhwc, [hindices_bt, windices_bt])
     # example of using a single array for indexing multiple axes
     hw_indices_bt = xp.stack([hindices_bt, windices_bt])
-    result2 = einindex("c t b <- b H W c, [H, W] b t", embedding_bhwc, hw_indices_bt)
+    result2 = _einindex("c t b <- b H W c, [H, W] b t", embedding_bhwc, hw_indices_bt)
     assert xp.all(result == result2)
 
     # check vs manual element computation
@@ -138,7 +138,7 @@ def test_reverse_indexing():
         + ixp.arange_at_position(4, 3, C, _t) * 1
     )
 
-    result = einindex("g b c h w <- g t b c, [t] g b h w", arr_gtbc, [t_indices_gbhw])
+    result = _einindex("g b c h w <- g t b c, [t] g b h w", arr_gtbc, [t_indices_gbhw])
 
     result_manual = result * 0
     for g in range(G):
@@ -186,19 +186,19 @@ def test_argmax_by_indexing():
     assert np.all(argmax(x, "i j k -> [i] k j")[0, ...] == reference.T)
 
     ind = argmax(x, "i j k -> [i] j k")
-    assert np.all(einindex("j k <- i j k, [i] j k", x, ind) == np.max(x, axis=0))
+    assert np.all(_einindex("j k <- i j k, [i] j k", x, ind) == np.max(x, axis=0))
 
     ind = argmax(x, "i j k -> [i, j] k")
-    assert np.all(einindex("k <- i j k, [i, j] k", x, ind) == np.max(x, axis=(0, 1)))
+    assert np.all(_einindex("k <- i j k, [i, j] k", x, ind) == np.max(x, axis=(0, 1)))
 
     ind = argmax(x, "i j k -> [j, i] k")
-    assert np.all(einindex("k <- i j k, [j, i] k", x, ind) == np.max(x, axis=(0, 1)))
+    assert np.all(_einindex("k <- i j k, [j, i] k", x, ind) == np.max(x, axis=(0, 1)))
 
     ind = argmax(x, "i j k -> [i, k] j")
-    assert np.all(einindex("j <- i j k, [i, k] j", x, ind) == np.max(x, axis=(0, 2)))
+    assert np.all(_einindex("j <- i j k, [i, k] j", x, ind) == np.max(x, axis=(0, 2)))
 
     ind = argmax(x, "i j k -> [k, i, j]")
-    assert np.all(einindex(" <- i j k, [k, i, j]", x, ind) == np.max(x))
+    assert np.all(_einindex(" <- i j k, [k, i, j]", x, ind) == np.max(x))
 
     check_max_min(x, "i j k -> [k, i, j]")
     check_max_min(x, "i j k -> [i, j] k")
@@ -217,12 +217,12 @@ def test_argsort_against_numpy():
     assert np.all(argsort(x, "i j k -> [i] k j order")[0, ...] == right)
 
     ind = argsort(x, "i j k -> [k, i, j] order")
-    assert np.all(einindex("order <- i j k, [k, i, j] order", x, ind) == np.sort(np.reshape(x, (-1,))))
+    assert np.all(_einindex("order <- i j k, [k, i, j] order", x, ind) == np.sort(np.reshape(x, (-1,))))
 
     ind = argsort(x, "i j k -> [k, i] order j")
     reference = np.permute_dims(x, (0, 2, 1))
     reference = np.reshape(reference, (-1, reference.shape[-1]))
-    assert np.all(einindex("order j <- i j k, [k, i] order j", x, ind) == np.sort(reference, axis=0))
+    assert np.all(_einindex("order j <- i j k, [k, i] order j", x, ind) == np.sort(reference, axis=0))
 
 
 def test_index():
@@ -243,7 +243,7 @@ def test_index():
 
     array = generate_array(xp, "a b c d", sizes=sizes)
     indexer = generate_indexer(xp, "[a, c] d f g", sizes=sizes)
-    result_einindex = einindex("g f d b <- a b c d, [a, c] d f g", array, indexer)
+    result_einindex = _einindex("g f d b <- a b c d, [a, c] d f g", array, indexer)
     result = gather("g f d b <- a b c d, [a, c] d f g", array, indexer)
     print(result.shape, flatten(xp, result)[0])
     print(result_einindex.shape, flatten(xp, result_einindex)[0])

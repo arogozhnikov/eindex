@@ -52,7 +52,7 @@ def argsort(tensor: Array, pattern: str, /) -> Array:
     return formula.apply_to_ixp(ixp, tensor)
 
 
-def einindex(pattern: str, arr: Array, ind: Union[Array, List[Array]], /):
+def _einindex(pattern: str, arr: Array, ind: Union[Array, List[Array]], /):
     formula = _core.IndexFormula(pattern)
     ixp = _ArrayApiIXP(arr.__array_namespace__())
     return formula.apply_to_array_api(ixp, arr, ind)
