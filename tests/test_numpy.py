@@ -3,7 +3,7 @@ from typing import Any, List, Tuple, TypeVar
 import numpy as np
 
 from eindex._core import CompositionDecomposition
-from eindex.numpy import _numpy_ixp, argmax, argmin, argsort, _einindex, gather, gather_scatter, scatter
+from eindex.numpy import _einindex, _numpy_ixp, argmax, argmin, argsort, gather, gather_scatter, scatter
 
 from .utils import (
     _enum_1d,

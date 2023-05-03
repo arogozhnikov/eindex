@@ -73,7 +73,7 @@ def _parse_comma_separated_dimensions(dims: str) -> List[str]:
     return axes_names
 
 
-def detect_duplicates(x: list[str]) -> list[str]:
+def detect_duplicates(x: List[str]) -> List[str]:
     return [name for name, count in Counter(x).items() if count > 1]
 
 

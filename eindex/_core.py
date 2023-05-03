@@ -1,7 +1,7 @@
 """
 Core formulas for transformations
 """
-from typing import Any, Iterable, List, Literal, Optional, Tuple, TypeVar, Union
+from typing import Any, Dict, Iterable, List, Literal, Optional, Tuple, TypeVar, Union
 
 from . import EindexError
 from ._parsing import ParsedPattern, _parse_indexing_part, _parse_space_separated_dimensions
@@ -53,7 +53,7 @@ class CompositionDecomposition:
         self.needs_reshape = any(len(g) != 1 for g in self.composed_shape)
         self.needs_transposition = list(flat_shape) != list(self.composed_shape)
 
-    def decompose_ixp(self, ixp: IXP, x: T, known_axes_lengths: dict[str, int]) -> T:
+    def decompose_ixp(self, ixp: IXP, x: T, known_axes_lengths: Dict[str, int]) -> T:
         shape = x.shape
 
         flat_shape = []
@@ -87,7 +87,7 @@ class CompositionDecomposition:
             x = ixp.permute_dims(x, self.decompose_transposition)
         return x
 
-    def compose_ixp(self, ixp: IXP, x: T, known_axes_lengths: dict[str, int]) -> T:
+    def compose_ixp(self, ixp: IXP, x: T, known_axes_lengths: Dict[str, int]) -> T:
         for axis_len, axis_name in zip(x.shape, self.decomposed_shape, strict=True):
             if axis_name in known_axes_lengths:
                 if not (known_axes_lengths[axis_name] == axis_len):
@@ -138,9 +138,9 @@ def _index_to_list_array_api(ind) -> List:
 def compute_full_index_ixp(
     ixp: IXP,
     ind: list,
-    indexing_axes: list[str],
-    indexer_other_axes_names: list[str],
-    flat_index_over: list[str],
+    indexing_axes: List[str],
+    indexer_other_axes_names: List[str],
+    flat_index_over: List[str],
     known_axes_sizes: dict,
 ) -> Any:
     if len(ind) != len(indexing_axes):
@@ -242,7 +242,7 @@ class IndexFormula:
         )
 
     def apply_to_array_api(self, ixp: IXP, arr: T, ind: Union[T, List[T]]) -> T:
-        known_axes_sizes: dict[str, int] = {}
+        known_axes_sizes: Dict[str, int] = {}
         ind_list = _index_to_list_array_api(ind)
 
         for indexer in ind_list:
@@ -273,7 +273,7 @@ class IndexFormula:
         return self.result_composition.decompose_ixp(ixp, result_2d, known_axes_sizes)
 
     def apply_to_numpy(self, ixp: IXP, arr: T, ind: Union[T, List[T]]) -> T:
-        known_axes_sizes: dict[str, int] = {}
+        known_axes_sizes: Dict[str, int] = {}
         ind_list = _index_to_list_array_api(ind)
 
         for indexer in ind_list:
@@ -364,7 +364,7 @@ class GatherFormula:
         )
 
     def apply_to_array_api(self, ixp: IXP, arr: T, ind: Union[T, List[T]]) -> T:
-        known_axes_sizes: dict[str, int] = {}
+        known_axes_sizes: Dict[str, int] = {}
         ind_list = _index_to_list_array_api(ind)
 
         for indexer in ind_list:
@@ -412,7 +412,7 @@ class GatherFormula:
         return self.result_composition.decompose_ixp(ixp, result_2d, known_axes_sizes)
 
     def apply_to_numpy(self, ixp: IXP, arr, ind):
-        known_axes_lengths: dict[str, int] = {}
+        known_axes_lengths: Dict[str, int] = {}
         ind_list = _index_to_list_array_api(ind)
 
         for indexer in ind_list:
@@ -508,7 +508,7 @@ class ScatterFormula:
             composed_shape=[self.index_walks, self.output_array_axes],
         )
 
-    def apply_to_numpy(self, ixp: IXP, arr: T, ind: Union[T, List[T]], axis_sizes: dict[str, int]):
+    def apply_to_numpy(self, ixp: IXP, arr: T, ind: Union[T, List[T]], axis_sizes: Dict[str, int]):
         ind_list = _index_to_list_array_api(ind)
         known_axes_lengths = {**axis_sizes}
 
@@ -621,7 +621,7 @@ class GatherScatterFormula:
             composed_shape=[self.index2_walks, self.result_and_array_axes],
         )
 
-    def apply_to_numpy(self, ixp: IXP, arr: T, ind: Union[T, List[T]], axis_sizes: dict[str, int]):
+    def apply_to_numpy(self, ixp: IXP, arr: T, ind: Union[T, List[T]], axis_sizes: Dict[str, int]):
         import numpy as np
 
         ind_list = _index_to_list_array_api(ind)
@@ -714,7 +714,7 @@ class ArgFindFormula:
         if on_one_side:
             raise EindexError(f"All axes should be present in left and right side, but these are not: {on_one_side}")
 
-        self.transposition: list[int] = [self.input_axes.index(axis) for axis in self.indexing_other_axes]
+        self.transposition: List[int] = [self.input_axes.index(axis) for axis in self.indexing_other_axes]
         # note: we place indexing axes in reverse order here
         self.transposition += [self.input_axes.index(axis) for axis in self.indexing_axes[::-1]]
         self.is_max: bool = is_max
@@ -774,7 +774,7 @@ class ArgsortFormula:
         if difference:
             raise EindexError(f"Axes {difference} should be present both in input and result of {pattern}")
 
-        self.transposition: list[int] = []
+        self.transposition: List[int] = []
         self.position_of_order_axis = self.indexing_other_axes.index(order_axis)
         for axis in self.indexing_other_axes:
             if axis == order_axis:

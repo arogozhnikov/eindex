@@ -1,4 +1,4 @@
-from typing import Union
+from typing import Dict, List, Union
 
 import numpy as np
 
@@ -86,7 +86,7 @@ class DemoData:
             ]
         )  # [network, hero, year] subscription
 
-    def _get_axis(self, axis_name: str, additional_axes: dict[str, list]):
+    def _get_axis(self, axis_name: str, additional_axes: Dict[str, list]):
         # allow overriding if necessary
         if axis_name in additional_axes:
             return additional_axes[axis_name]
@@ -141,7 +141,7 @@ class DemoData:
             ys = _parse_space_separated_dimensions(rows)
         assert {*xs, *ys} == {*other_axes}
 
-        def enumerate_multiaxis(dims: list[str]):
+        def enumerate_multiaxis(dims: List[str]):
             axis_values = [
                 [(dim, i, val) for i, val in enumerate(self._get_axis(dim, additional_axes))] for dim in dims
             ]

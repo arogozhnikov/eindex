@@ -1,10 +1,7 @@
 from typing import TypeVar
 
 from eindex._core import CompositionDecomposition
-from eindex.array_api import _ArrayApiIXP, argmax, argmin, argsort, _einindex, gather
-
-# gather_scatter,
-# scatter,
+from eindex.array_api import _ArrayApiIXP, _einindex, argmax, argmin, argsort, gather
 
 from .utils import (
     _enum_1d,

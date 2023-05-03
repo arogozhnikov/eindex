@@ -46,8 +46,8 @@ def argmin(tensor: Array, pattern: str, /) -> Array:
     return formula.apply_to_ixp(ixp, tensor)
 
 
-def argsort(tensor: Array, pattern: str, /) -> Array:
-    formula = _core.ArgsortFormula(pattern)
+def argsort(tensor: Array, pattern: str, /, *, order_axis="order") -> Array:
+    formula = _core.ArgsortFormula(pattern, order_axis=order_axis)
     ixp = _ArrayApiIXP(tensor.__array_namespace__())
     return formula.apply_to_ixp(ixp, tensor)
 
