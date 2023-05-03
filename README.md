@@ -38,7 +38,6 @@ Repo provides two implementation:
   This independent implementation works right now.
 
   Numpy implementation is great to test things out, and is handy for a number of non-DL applications as well.
-  There is no optimization right now.
 
 
 ## Development Status
@@ -60,18 +59,18 @@ is an einops-inspired effort by Jonathan Malmaud (@malmaud) to develop multi-dim
 
 ## Contributing
 
-Minimization of maintenance costs is critical.
-
 Right ways to contribute:
 
 - next time you deal with multidimensional indexing, do this with eindex <br />
-  Worked? -> great - [let us know](https://github.com/arogozhnikov/eindex/discussions/new?category=show-and-tell); didn't work or unclear how to implement -> post in [discussions](https://github.com/arogozhnikov/eindex/discussions)
+  Worked? &rarr; great - [let us know](https://github.com/arogozhnikov/eindex/discussions/new?category=show-and-tell); didn't work or unclear how to implement &rarr; post in [discussions](https://github.com/arogozhnikov/eindex/discussions)
 - if you feel you're already fluent in eindex, help others
 - alternative guides/tutorials/video-guides are very welcome
 - If you want to translate tutorial to other language and post it somewhere - welcome 
 
 
-Wrong way to contribute: suggesting more operations/features.
+Wrong way to contribute: suggesting more operations/features. 
+Goal is to address practical usecases with a minimal API.
 
 There is an infinite space of operations, and a long list of requirements / desired properties for operations.
-Thus in design of operations I prefer detailed boring analysis of usecases to exciting feature-packing. 
+Thus in design of operations I prefer detailed (boring) analysis of usecases to (exciting) feature-packing.
+
