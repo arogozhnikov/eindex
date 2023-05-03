@@ -74,3 +74,53 @@ Goal is to address practical usecases with a minimal API.
 There is an infinite space of operations, and a long list of requirements / desired properties for operations.
 Thus in design of operations I prefer detailed (boring) analysis of usecases to (exciting) feature-packing.
 
+
+<table>
+<tr>
+<td markdown=1>
+
+```python
+# plain numpy
+def kmeans(init_centers, X, n_iterations: int):
+    n_clusters, n_dim = init_centers.shape
+    n_onservations, n_dim = X.shape
+
+    centers = init_centers.copy()
+    for _ in range(n_iterations):
+        d = cdist(centers, X)
+        clusters = np.argmin(d, axis=0)            
+        new_centers_sum = np.zeros_like(centers)
+        clstr_indices = np.tile(clusters[:, None], reps=(1, n_dim))
+        dim___indices = np.tile(np.arange(n_dim)[None, :], 
+                                reps=(n_onservations, 1))
+        np.add.at(new_centers_sum, (clstr_indices, dim___indices), X)
+        cluster_counts = np.bincount(clusters, minlength=n_clusters)
+        centers = new_centers_sum / cluster_counts[:, None]
+    return centers
+```
+</td>
+<td markdown=1>
+
+```python
+# with eindex
+def kmeans_eindex(init_centers, X, n_iterations: int):
+
+
+
+    centers = init_centers
+    for _ in range(n_iterations):
+        d = cdist(centers, X)
+        clusters = EX.argmin(d, 'cluster i -> [cluster] i')
+        centers = EX.scatter('cluster c <- i c, [cluster] i ', X, clusters, 
+                             aggregation='mean', cluster=len(centers))
+
+
+
+
+
+    return centers
+```
+</td>
+</tr>
+</table>
+
