@@ -50,20 +50,20 @@ def _einindex(pattern: str, arr: Array, ind: Union[Array, List[Array]], /):
     return formula.apply_to_numpy(_numpy_ixp, arr, ind)
 
 
-def gather(pattern: str, arr: Array, ind: Union[Array, List[Array]], aggregation: Optional[Aggregation] = None):
-    formula = _core.GatherFormula(pattern=pattern, aggregation=aggregation)
+def gather(pattern: str, arr: Array, ind: Union[Array, List[Array]], agg: Optional[Aggregation] = None):
+    formula = _core.GatherFormula(pattern=pattern, agg=agg)
     return formula.apply_to_numpy(_numpy_ixp, arr, ind)
 
 
 def gather_scatter(
-    pattern: str, arr: Array, ind: Union[Array, List[Array]], /, aggregation: Aggregation = "sum", **axis_sizes: int
+    pattern: str, arr: Array, ind: Union[Array, List[Array]], /, agg: Aggregation = "sum", **axis_sizes: int
 ):
-    formula = _core.GatherScatterFormula(pattern, aggregation=aggregation)
+    formula = _core.GatherScatterFormula(pattern, agg=agg)
     return formula.apply_to_numpy(_numpy_ixp, arr, ind, axis_sizes=axis_sizes)
 
 
 def scatter(
-    pattern: str, arr: Array, ind: Union[Array, List[Array]], /, aggregation: Aggregation = "sum", **axis_sizes: int
+    pattern: str, arr: Array, ind: Union[Array, List[Array]], /, agg: Aggregation = "sum", **axis_sizes: int
 ):
-    formula = _core.ScatterFormula(pattern, aggregation=aggregation)
+    formula = _core.ScatterFormula(pattern, agg=agg)
     return formula.apply_to_numpy(_numpy_ixp, arr, ind, axis_sizes=axis_sizes)

@@ -281,7 +281,7 @@ def test_gather():
     full_pattern = f"{final_pattern} <- {array_pattern}, {index_pattern}"
     array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
     indexer = generate_indexer(np, index_pattern, sizes=sizes)
-    result_gather = gather(full_pattern, array, indexer, aggregation="sum")
+    result_gather = gather(full_pattern, array, indexer, agg="sum")
 
     _ixp = _ArrayApiIXP(np)
     indexer_as_dict = enumerate_indexer(_ixp, index_pattern, indexer=indexer, sizes=sizes)
@@ -306,7 +306,7 @@ def test_gather():
         ("min", min, np.inf),
         ("max", max, -np.inf),
     ]:
-        result_gather = gather(full_pattern, array, indexer, aggregation=agg_name)
+        result_gather = gather(full_pattern, array, indexer, agg=agg_name)
         result_gather = np.reshape(result_gather, (-1,))
         result_ref = np.full(shape=tuple(sizes[d] for d in final_pattern.split()), fill_value=default_value)
         result_ref = np.reshape(result_ref, (-1,))
@@ -319,12 +319,12 @@ def test_gather():
         assert np.all(np.astype(result_ref, np.int64) == result_gather)
 
     # checking mean aggregation on constant tensor
-    result_mean_const = gather(full_pattern, np.full(array.shape, fill_value=3.0), indexer, aggregation="mean")
+    result_mean_const = gather(full_pattern, np.full(array.shape, fill_value=3.0), indexer, agg="mean")
     assert np.all(result_mean_const == 3.0)
 
     # testing that ratio is constant, as number of elements averaged is the same for every result entry
     values = np.astype(array**2, np.float64) + 1.0
-    result_mean = gather(full_pattern, values, indexer, aggregation="mean")
-    result__sum = gather(full_pattern, values, indexer, aggregation="sum")
+    result_mean = gather(full_pattern, values, indexer, agg="mean")
+    result__sum = gather(full_pattern, values, indexer, agg="sum")
     ratio = result_mean / result__sum
     assert np.min(ratio) * 0.99 < np.max(ratio) < np.min(ratio) * 1.01

@@ -280,7 +280,7 @@ def test_gather():
     full_pattern = f"{final_pattern} <- {array_pattern}, {index_pattern}"
     array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
     indexer = generate_indexer(np, index_pattern, sizes=sizes)
-    result_gather = gather(full_pattern, array, indexer, aggregation="sum")
+    result_gather = gather(full_pattern, array, indexer, agg="sum")
     indexer_as_dict = enumerate_indexer(_numpy_ixp, index_pattern, indexer=indexer, sizes=sizes)
 
     array_flat = flatten(np, array)
@@ -302,7 +302,7 @@ def test_gather():
         ("min", min, np.inf),
         ("max", max, -np.inf),
     ]:
-        result_gather = gather(full_pattern, array, indexer, aggregation=agg_name).reshape(-1)
+        result_gather = gather(full_pattern, array, indexer, agg=agg_name).reshape(-1)
         result_ref = np.full(shape=[sizes[d] for d in final_pattern.split()], fill_value=default_value).reshape(-1)
         for d in range(sizes["d"]):
             flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
@@ -313,12 +313,12 @@ def test_gather():
         assert np.allclose(result_ref, result_gather)
 
     # checking mean aggregation on constant tensor
-    result_mean_const = gather(full_pattern, array * 0 + 3.0, indexer, aggregation="mean")
+    result_mean_const = gather(full_pattern, array * 0 + 3.0, indexer, agg="mean")
     assert np.allclose(result_mean_const, 3.0)
 
     # testing that ratio is constant, as number of elements averaged is the same for every result entry
-    result_mean = gather(full_pattern, array.clip(0) + 1.0, indexer, aggregation="mean")
-    result__sum = gather(full_pattern, array.clip(0) + 1.0, indexer, aggregation="sum")
+    result_mean = gather(full_pattern, array.clip(0) + 1.0, indexer, agg="mean")
+    result__sum = gather(full_pattern, array.clip(0) + 1.0, indexer, agg="sum")
     ratio = result_mean / result__sum
     assert ratio.min() * 0.99 < ratio.max() < ratio.min() * 1.01
 
@@ -357,9 +357,7 @@ def test_scatter():
 
     # check different aggregations
     for agg_name, agg_func, default_value in list_aggname_aggfunc_default_value():
-        result_scatter = scatter(
-            full_pattern, array, indexer, aggregation=agg_name, f=sizes["f"], h=sizes["h"]
-        ).reshape(-1)
+        result_scatter = scatter(full_pattern, array, indexer, agg=agg_name, f=sizes["f"], h=sizes["h"]).reshape(-1)
         result_ref = np.full(
             shape=[sizes[d] for d in final_pattern.split()], fill_value=default_value, dtype=array.dtype
         ).reshape(-1)
@@ -372,8 +370,8 @@ def test_scatter():
         assert np.allclose(result_ref, result_scatter)
 
     # testing aggregation on constant
-    result = scatter(full_pattern, array * 0 + 3.0, indexer, aggregation="mean", f=sizes["f"], h=sizes["h"])
-    result_sum = scatter(full_pattern, array * 0 + 1.0, indexer, aggregation="sum", f=sizes["f"], h=sizes["h"])
+    result = scatter(full_pattern, array * 0 + 3.0, indexer, agg="mean", f=sizes["f"], h=sizes["h"])
+    result_sum = scatter(full_pattern, array * 0 + 1.0, indexer, agg="sum", f=sizes["f"], h=sizes["h"])
     assert np.allclose(result[result_sum > 0], 3.0)
     assert np.all(np.isnan(result[result_sum == 0]))
 
@@ -412,7 +410,7 @@ def test_gather_scatter():
 
     # check different aggregations
     for agg_name, agg_func, default_value in list_aggname_aggfunc_default_value():
-        result_gst = gather_scatter(full_pattern, array, indexer, aggregation=agg_name, i3=sizes["i3"]).reshape(-1)
+        result_gst = gather_scatter(full_pattern, array, indexer, agg=agg_name, i3=sizes["i3"]).reshape(-1)
         result_ref = np.full(
             shape=[sizes[d] for d in final_pattern.split()], fill_value=default_value, dtype=array.dtype
         ).reshape(-1)
@@ -425,8 +423,8 @@ def test_gather_scatter():
         assert np.allclose(result_ref, result_gst)
 
     # check aggregation of constant
-    result_mean = gather_scatter(full_pattern, array * 0 + 3.0, indexer, aggregation="mean", i3=sizes["i3"])
-    result_sum = gather_scatter(full_pattern, array * 0 + 1, indexer, aggregation="sum", i3=sizes["i3"])
+    result_mean = gather_scatter(full_pattern, array * 0 + 3.0, indexer, agg="mean", i3=sizes["i3"])
+    result_sum = gather_scatter(full_pattern, array * 0 + 1, indexer, agg="sum", i3=sizes["i3"])
     assert np.all(result_mean[result_sum > 0] == 3)
     assert np.all(np.isnan(result_mean[result_sum == 0]))
 

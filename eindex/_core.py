@@ -305,7 +305,7 @@ class IndexFormula:
 
 
 class GatherFormula:
-    def __init__(self, pattern: str, aggregation: Optional[Aggregation]) -> None:
+    def __init__(self, pattern: str, agg: Optional[Aggregation]) -> None:
         """
         Example in which one aggregates the data
         'b t c <- b H W s c, [H, W] b t s replica'
@@ -313,7 +313,7 @@ class GatherFormula:
         where multiple replicas are aggregated by plain sum
         """
         self.parsed_pattern = ParsedPattern(pattern)
-        self.aggregation = aggregation
+        self.agg = agg
 
         self.indexer_axes = []  # H, W
         self.batch_axes = []  # b
@@ -332,11 +332,11 @@ class GatherFormula:
             elif presence == (True, True, False, False):
                 self.result_and_array_axes.append(axis)
             elif presence == (False, True, False, True):
-                if aggregation is None:
+                if agg is None:
                     raise EindexError(f"Axis '{axis}' can't be reduced as no aggregation set: {pattern}")
                 self.array_and_index_axes.append(axis)
             elif presence == (False, False, False, True):
-                if aggregation is None:
+                if agg is None:
                     raise EindexError(f"Axis '{axis}' can't be reduced as no aggregation set: {pattern}")
                 self.index_only_axes.append(axis)
             else:
@@ -394,19 +394,19 @@ class GatherFormula:
         # and decompose dims in result
         arr_3d = xp.reshape(result_squashed, [*full_index_2d.shape, result_squashed.shape[-1]])
 
-        if self.aggregation is None:
+        if self.agg is None:
             assert arr_3d.shape[0] == 1
             result_2d = arr_3d[0, :, :]
-        elif self.aggregation == "sum":
+        elif self.agg == "sum":
             result_2d = xp.sum(arr_3d, axis=0)
-        elif self.aggregation == "min":
+        elif self.agg == "min":
             result_2d = xp.min(arr_3d, axis=0)
-        elif self.aggregation == "max":
+        elif self.agg == "max":
             result_2d = xp.max(arr_3d, axis=0)
-        elif self.aggregation == "mean":
+        elif self.agg == "mean":
             result_2d = xp.mean(arr_3d, axis=0)
         else:
-            raise NotImplementedError(f"Reduction {self.aggregation} is not available")
+            raise NotImplementedError(f"Reduction {self.agg} is not available")
 
         # step 5. reshape result to correct form
         return self.result_composition.decompose_ixp(ixp, result_2d, known_axes_sizes)
@@ -437,31 +437,31 @@ class GatherFormula:
         # step 4. indexing
         # cshape = self.result_composition.composed_shape
         # shape = [_prod(known_axes_lengths[var] for var in group) for group in cshape]
-        if self.aggregation is None:
+        if self.agg is None:
             assert full_index_2d.shape[0] == 1
             result_2d = arr_2d[full_index_2d[0]]
-        elif self.aggregation == "sum":
+        elif self.agg == "sum":
             result_2d = arr_2d[full_index_2d].sum(axis=0)
-        elif self.aggregation == "min":
+        elif self.agg == "min":
             result_2d = arr_2d[full_index_2d].min(axis=0)
-        elif self.aggregation == "max":
+        elif self.agg == "max":
             result_2d = arr_2d[full_index_2d].max(axis=0)
-        elif self.aggregation == "mean":
+        elif self.agg == "mean":
             result_2d = arr_2d[full_index_2d].mean(axis=0)
         else:
-            raise NotImplementedError(f"Reduction {self.aggregation} is not available")
+            raise NotImplementedError(f"Reduction {self.agg} is not available")
 
         # step 5. reshape result to correct form
         return self.result_composition.decompose_ixp(ixp, result_2d, known_axes_lengths)
 
 
 class ScatterFormula:
-    def __init__(self, pattern: str, aggregation: Aggregation) -> None:
+    def __init__(self, pattern: str, agg: Aggregation) -> None:
         """
         Performs scattering (aggregation in positions).
         Example of pattern: b s H W c <- b t c, [H W] b t s replica
         """
-        self.aggregation = aggregation
+        self.agg = agg
         self.parsed_pattern = ParsedPattern(pattern=pattern)
 
         self.batch_axes = []  # b
@@ -522,7 +522,8 @@ class ScatterFormula:
             if axis not in known_axes_lengths:
                 known_axes_lengths[axis] = axis_len
             else:
-                assert axis_len == known_axes_lengths[axis]
+                if axis_len != known_axes_lengths[axis]:
+                    raise EindexError(f"Two different values for {axis}: {axis_len} and {known_axes_lengths[axis]}")
 
         flat_index = compute_full_index_ixp(
             ixp,
@@ -544,16 +545,16 @@ class ScatterFormula:
         import numpy as np
 
         # step 4. aggregation
-        if self.aggregation == "sum":
+        if self.agg == "sum":
             result = np.zeros(shape, dtype=dtype)
             np.add.at(result, flat_index_2d, arr_2d)
-        elif self.aggregation == "max":
+        elif self.agg == "max":
             result = np.full(shape, fill_value=-np.inf, dtype=dtype)
             np.maximum.at(result, flat_index_2d, arr_2d)
-        elif self.aggregation == "min":
+        elif self.agg == "min":
             result = np.full(shape, fill_value=np.inf, dtype=dtype)
             np.minimum.at(result, flat_index_2d, arr_2d)
-        elif self.aggregation == "mean":
+        elif self.agg == "mean":
             # mean is not ufunc and can't be just accumulated
             assert dtype in [np.float16, np.float32, np.float64], "mean reduction supported only for float tensors"
             nom = np.zeros(shape, dtype=dtype)
@@ -563,19 +564,19 @@ class ScatterFormula:
             result = nom / denom
             assert nom.shape == result.shape
         else:
-            raise NotImplementedError(self.aggregation)
+            raise NotImplementedError(self.agg)
 
         return self.result_composition.decompose_ixp(ixp, result, known_axes_lengths=known_axes_lengths)
 
 
 class GatherScatterFormula:
-    def __init__(self, pattern: str, aggregation: Aggregation):
+    def __init__(self, pattern: str, agg: Aggregation):
         """
         performs gather and scatter at the same time
         :param pattern: e.g 'b t H W2 c <- b H W c, [H, W, W2] b t order'
         """
         self.parsed_pattern = ParsedPattern(pattern)
-        self.aggregation = aggregation
+        self.agg = agg
 
         self.batch_axes = []  # b
         self.input_indexer_axes = []  # h, w
@@ -666,16 +667,16 @@ class GatherScatterFormula:
 
         dtype = arr.dtype
 
-        if self.aggregation == "sum":
+        if self.agg == "sum":
             result_2d = np.zeros([first_axis, taken_2d.shape[1]], dtype=dtype)
             np.add.at(result_2d, second_flat_index.flatten(), taken_2d)
-        elif self.aggregation == "max":
+        elif self.agg == "max":
             result_2d = np.full([first_axis, taken_2d.shape[1]], fill_value=-np.inf, dtype=dtype)
             np.maximum.at(result_2d, second_flat_index.flatten(), taken_2d)
-        elif self.aggregation == "min":
+        elif self.agg == "min":
             result_2d = np.full([first_axis, taken_2d.shape[1]], fill_value=np.inf, dtype=dtype)
             np.minimum.at(result_2d, second_flat_index.flatten(), taken_2d)
-        elif self.aggregation == "mean":
+        elif self.agg == "mean":
             assert dtype in [np.float16, np.float32, np.float64], "Mean-reduction supported only for floating dtypes"
             result_2d_nom = np.zeros([first_axis, taken_2d.shape[1]], dtype=dtype)
             np.add.at(result_2d_nom, second_flat_index.flatten(), taken_2d)
@@ -684,7 +685,7 @@ class GatherScatterFormula:
             result_2d = result_2d_nom / result_2d_denom
             assert result_2d.shape == result_2d_nom.shape
         else:
-            raise NotImplementedError(f"Unknown reduction: {self.aggregation}")
+            raise NotImplementedError(f"Unknown reduction: {self.agg}")
 
         # step 5
         return self.result_decomposition.decompose_ixp(ixp, result_2d, known_axes_lengths=known_axes_lengths)
