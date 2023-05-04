@@ -7,7 +7,7 @@
 Multidimensional indexing for tensors
 
 
-## Examples
+## Example of K-means clustering
 
 
 <table>
@@ -44,8 +44,16 @@ def kmeans_eindex(init_centers, X, n_iterations: int):
         d = cdist(centers, X)
         clusters = EX.argmin(d, 'cluster i -> [cluster] i')
         centers = EX.scatter('cluster c <- i c, [cluster] i ', X, clusters, 
-                             aggregation='mean', cluster=len(centers))
+                             agg='mean', cluster=len(centers))
     return centers
+
+
+
+
+
+
+
+
 ```
 </td>
 </tr>
@@ -53,13 +61,13 @@ def kmeans_eindex(init_centers, X, n_iterations: int):
 
 ## Goals
 
-- Form helpful 'language' to think about indexing and index-related operations. Tools shape mind 
+- Form helpful 'language' to think about indexing and index-related operations. Tools shape minds 
 - Cover most common cases of multidimensional indexing that are hard to implement using the standard API
 - Approach should be applicable to most common tensor frameworks, autograd should work out-of-the-box
 - Aim for readable and reliable code
 - Allow simple adoption in existing codebases
 - Implementation should base on fairly common tensor operations. No custom kernels allowed.
-- Desired limitation: execution plan for every operation should form a static graph. 
+- Complexity should be visible: execution plan for every operation should form a static graph. 
   Structure of the graph depends on the pattern, but not on tensor arguments.
 
 Non-goals: there is no goal to develop 'the shortest notation' or 'the most advanced/comprehensive tool for indexing' or 'cover as many operations as possible' or 'completely replace default indexing'.
@@ -96,27 +104,19 @@ Other projects you likely want to look at:
 - [tullio](https://github.com/mcabbott/Tullio.jl) by Michael Abbott (@mcabbott) provides Julia macros with a high level of flexibility. 
   Resulting operations are then compiled.
 - [torchdim](https://github.com/facebookresearch/torchdim) by Zachary DeVito (@zdevito) introduces "dimension objects", which in particular allow convenient multi-dim indexing
-- [einindex](https://github.com/malmaud/einindex) by 
-is an einops-inspired effort by Jonathan Malmaud (@malmaud) to develop multi-dim indexing notation.
+- [einindex](https://github.com/malmaud/einindex) is an einops-inspired effort by Jonathan Malmaud (@malmaud) to develop multi-dim indexing notation.
   (Also, that's why this package isn't called `einindex`)
 
 
 ## Contributing
 
-Right ways to contribute:
+We welcome following contributions:
 
 - next time you deal with multidimensional indexing, do this with eindex <br />
   Worked? &rarr; great - [let us know](https://github.com/arogozhnikov/eindex/discussions/new?category=show-and-tell); didn't work or unclear how to implement &rarr; post in [discussions](https://github.com/arogozhnikov/eindex/discussions)
 - if you feel you're already fluent in eindex, help others
 - alternative guides/tutorials/video-guides are very welcome
 - If you want to translate tutorial to other language and post it somewhere - welcome 
-
-
-Wrong way to contribute: suggesting more operations/features. 
-Goal is to address practical usecases with a minimal API.
-
-There is an infinite space of operations, and a long list of requirements / desired properties for operations.
-Thus in design of operations I prefer detailed (boring) analysis of usecases to (exciting) feature-packing.
 
 
 
