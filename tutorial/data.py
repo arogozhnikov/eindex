@@ -181,7 +181,7 @@ class DemoData:
         for row_id, row_axes_dict, _row_labels in enumerate_multiaxis(ys):
             for col_id, col_axes_dict, _col_labels in enumerate_multiaxis(xs):
                 values = values_at(**row_axes_dict, **col_axes_dict)
-                decoded = [decode(name, val) for name, val in zip(main_axes, values, strict=True)]
+                decoded = [decode(name, val) for name, val in zip(main_axes, values)]
                 text = ", ".join(str(x) for x in decoded)
                 is_number = text.removeprefix("-").replace(".", "", 1).isdigit()
                 if is_number:

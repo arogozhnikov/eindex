@@ -1,6 +1,6 @@
 from typing import TypeVar
 
-from eindex._core import CompositionDecomposition
+from eindex._core import CompositionDecomposition, zip2
 from eindex.array_api import _ArrayApiIXP, _einindex, argmax, argmin, argsort, gather
 
 from .utils import (
@@ -253,7 +253,7 @@ def test_index():
         array_flat = flatten(xp, array)
         result_flat = flatten(xp, result)
 
-        for i, j in zip(flat_index_arr, flat_index_result, strict=True):
+        for i, j in zip2(flat_index_arr, flat_index_result):
             assert array_flat[i] == result_flat[j], ("failed", i, j)
 
     assert xp.all(result_einindex == result), (result_einindex, result)
@@ -290,7 +290,7 @@ def test_gather():
         flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
         flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
 
-        for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+        for ia, ir in zip2(flat_index_array, flat_index_final):
             result_flat[ir] -= array_flat[ia]
 
     assert np.max(abs(result_flat)) == 0
@@ -311,7 +311,7 @@ def test_gather():
             flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
             flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
 
-            for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+            for ia, ir in zip2(flat_index_array, flat_index_final):
                 result_ref[ir] = agg_func(array_flat_float[ia], result_ref[ir])
         assert np.all(np.astype(result_ref, np.int64) == result_gather)
 

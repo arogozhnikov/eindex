@@ -7,6 +7,7 @@ from . import EindexError
 from ._parsing import ParsedPattern, _parse_indexing_part, _parse_space_separated_dimensions
 
 T = TypeVar("T")
+T2 = TypeVar("T2")
 
 
 Aggregation = Literal["min", "max", "sum", "mean"]  # "std", "logsumexp"
@@ -27,6 +28,13 @@ class IXP:
 
     def arange_at_position(self, n_axes, axis, axis_len, array_to_copy_device_from):
         raise NotImplementedError()
+
+
+def zip2(x: Iterable[T], y: Iterable[T2]) -> List[Tuple[T, T2]]:
+    x = list(x)
+    y = list(y)
+    assert len(x) == len(y), "sequences have different lengths"
+    return list(zip(x, y))
 
 
 class CompositionDecomposition:
@@ -88,7 +96,7 @@ class CompositionDecomposition:
         return x
 
     def compose_ixp(self, ixp: IXP, x: T, known_axes_lengths: Dict[str, int]) -> T:
-        for axis_len, axis_name in zip(x.shape, self.decomposed_shape, strict=True):
+        for axis_len, axis_name in zip2(x.shape, self.decomposed_shape):
             if axis_name in known_axes_lengths:
                 if not (known_axes_lengths[axis_name] == axis_len):
                     raise EindexError(
@@ -126,7 +134,9 @@ def _prod(x: Iterable[int]) -> int:
 def _broadcast_shapes(shapes: List[Tuple[int, ...]]) -> List[int]:
     # naive, does not really verify shapes
     # number of dimensions should be the same
-    return [max(axis_len_in_arrays) for axis_len_in_arrays in zip(*shapes, strict=True)]
+    lengths = [len(s) for s in shapes]
+    assert min(lengths) == max(lengths), f"provided indices should have same number of dimensions: {shapes}"
+    return [max(axis_len_in_arrays) for axis_len_in_arrays in zip(*shapes)]
 
 
 def _index_to_list_array_api(ind) -> List:
@@ -518,7 +528,7 @@ class ScatterFormula:
         # step 1. build first index of shape [b t s replica] -> (b h w)
         # some output axes may be present only in ind_other_axes
         index_other_shape = _broadcast_shapes([x.shape for x in ind_list])
-        for axis_len, axis in zip(index_other_shape, self.parsed_pattern.ind_other_axes_names, strict=True):
+        for axis_len, axis in zip2(index_other_shape, self.parsed_pattern.ind_other_axes_names):
             if axis not in known_axes_lengths:
                 known_axes_lengths[axis] = axis_len
             else:
@@ -633,7 +643,7 @@ class GatherScatterFormula:
         # step 1. build first index of shape [b t order] -> (b h w)
         # some output axes may be present only in ind_other_axes
         index_other_shape = _broadcast_shapes([x.shape for x in ind_list])
-        for axis_len, axis in zip(index_other_shape, self.parsed_pattern.ind_other_axes_names, strict=True):
+        for axis_len, axis in zip2(index_other_shape, self.parsed_pattern.ind_other_axes_names):
             if axis not in known_axes_lengths:
                 known_axes_lengths[axis] = axis_len
             else:

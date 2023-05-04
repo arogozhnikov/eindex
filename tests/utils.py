@@ -1,6 +1,6 @@
 from typing import Any, Dict, List
 
-from eindex._core import IXP, _index_to_list_array_api, _parse_indexing_part, _parse_space_separated_dimensions
+from eindex._core import IXP, _index_to_list_array_api, _parse_indexing_part, _parse_space_separated_dimensions, zip2
 
 Array = Any
 
@@ -77,7 +77,7 @@ def compose_index(indexers, shapes: list):
     indexers = _index_to_list_array_api(indexers)
 
     result = 0
-    for indexer, axis_len in zip(indexers, shapes, strict=True):
+    for indexer, axis_len in zip2(indexers, shapes):
         result = result * axis_len + indexer
     return result
 

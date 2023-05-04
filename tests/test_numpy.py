@@ -2,7 +2,7 @@ from typing import Any, List, Tuple, TypeVar
 
 import numpy as np
 
-from eindex._core import CompositionDecomposition
+from eindex._core import CompositionDecomposition, zip2
 from eindex.numpy import _einindex, _numpy_ixp, argmax, argmin, argsort, gather, gather_scatter, scatter
 
 from .utils import (
@@ -251,7 +251,7 @@ def test_index():
         array_flat = flatten(np, array)
         result_flat = flatten(np, result1)
 
-        for i, j in zip(flat_index_arr, flat_index_result, strict=True):
+        for i, j in zip2(flat_index_arr, flat_index_result):
             assert array_flat[i] == result_flat[j]
 
 
@@ -290,7 +290,7 @@ def test_gather():
         flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
         flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
 
-        for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+        for ia, ir in zip2(flat_index_array, flat_index_final):
             result_flat[ir] -= array_flat[ia]
 
     assert np.max(abs(result_flat)) == 0
@@ -308,7 +308,7 @@ def test_gather():
             flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
             flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
 
-            for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+            for ia, ir in zip2(flat_index_array, flat_index_final):
                 result_ref[ir] = agg_func(array_flat[ia], result_ref[ir])
         assert np.allclose(result_ref, result_gather)
 
@@ -350,7 +350,7 @@ def test_scatter():
         flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
         flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
 
-        for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+        for ia, ir in zip2(flat_index_array, flat_index_final):
             result_flat[ir] -= array_flat[ia]
 
     assert np.max(abs(result_flat)) == 0
@@ -365,7 +365,7 @@ def test_scatter():
             flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
             flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
 
-            for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+            for ia, ir in zip2(flat_index_array, flat_index_final):
                 result_ref[ir] = agg_func(array_flat[ia], result_ref[ir])
         assert np.allclose(result_ref, result_scatter)
 
@@ -403,7 +403,7 @@ def test_gather_scatter():
         flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "c": c}, sizes=sizes)
         flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "c": c}, sizes=sizes)
 
-        for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+        for ia, ir in zip2(flat_index_array, flat_index_final):
             result_flat[ir] -= array_flat[ia]
 
     assert np.max(abs(result_flat)) == 0
@@ -418,7 +418,7 @@ def test_gather_scatter():
             flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "c": c}, sizes=sizes)
             flat_index_final = to_flat_index(final_pattern, {**indexer_as_dict, "c": c}, sizes=sizes)
 
-            for ia, ir in zip(flat_index_array, flat_index_final, strict=True):
+            for ia, ir in zip2(flat_index_array, flat_index_final):
                 result_ref[ir] = agg_func(array_flat[ia], result_ref[ir])
         assert np.allclose(result_ref, result_gst)
 
