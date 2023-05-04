@@ -7,9 +7,10 @@ assignees: ''
 
 ---
 
-Eindex sparks a lot of interest to introduce new operations that either meet specific requirements or look like a plausible extension of existing ones.
+Eindex sparks natural interest to introduce new operations that either meet specific requirements or look like a plausible extension of existing ones.
 
-Previous experience with einops shows that most suggestions do not meet, so 
+Previous experience with einops shows that most suggestions don't meet necessary requirements, 
+so here is the list to check first:
 
 1. Collect **use-cases**. Real ones. Ideas without use-cases are already dead.
 2. **Implementation**. (optional) Implementing a sketch of your proposal (e.g. for numpy) allows detecting possible conflicts and realize possible caveats.
