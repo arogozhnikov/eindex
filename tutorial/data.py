@@ -1,4 +1,4 @@
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 import numpy as np
 
@@ -115,8 +115,10 @@ class DemoData:
         index_pattern: str,
         cols: str,
         rows: str | None = None,
-        additional_axes={},
+        additional_axes: Optional[dict] = None,
     ):
+        if additional_axes is None:
+            additional_axes = {}
         from IPython.display import HTML, display  # type: ignore
 
         from eindex._parsing import _parse_indexing_part, _parse_space_separated_dimensions
