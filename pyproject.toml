@@ -111,6 +111,7 @@ ignore = [
     "C413",   # list around sorted
     "C401",   # rewrite set( ) as set comprehension
     "RUF100", # unused noqa.
+    "B905",   # `zip()` without an explicit `strict=` parameter - supported only in py3.10
 ]
 
 select = [
