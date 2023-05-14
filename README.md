@@ -150,7 +150,7 @@ Other projects you likely want to look at:
 - [tullio](https://github.com/mcabbott/Tullio.jl) by Michael Abbott (@mcabbott) provides Julia macros with a high level of flexibility. 
   Resulting operations are then compiled.
 - [torchdim](https://github.com/facebookresearch/torchdim) by Zachary DeVito (@zdevito) introduces "dimension objects", which in particular allow convenient multi-dim indexing
-- [einindex](https://github.com/malmaud/einindex) is an einops-inspired effort by Jonathan Malmaud (@malmaud) to develop multi-dim indexing notation.
+- [einindex](https://github.com/malmaud/einindex) is an einops-inspired prototype by Jonathan Malmaud (@malmaud) to develop multi-dim indexing notation.
   (Also, that's why this package isn't called `einindex`)
 
 
@@ -166,3 +166,6 @@ We welcome the following contributions:
 
 
 
+## Discussions
+
+Use github discussions for this project https://github.com/arogozhnikov/eindex/discussions
