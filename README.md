@@ -10,9 +10,6 @@ Multidimensional indexing for tensors
 ## Example of K-means clustering
 
 
-<table>
-<tr>
-<td markdown=1>
 Plain numpy
 
 ```python
@@ -33,8 +30,8 @@ def kmeans(init_centers, X, n_iterations: int):
         centers = new_centers_sum / cluster_counts[:, None]
     return centers
 ```
-</td>
-<td markdown=1>
+
+
 With eindex
 
 ```python
@@ -46,18 +43,7 @@ def kmeans_eindex(init_centers, X, n_iterations: int):
         centers = EX.scatter('cluster c <- i c, [cluster] i ', X, clusters, 
                              agg='mean', cluster=len(centers))
     return centers
-
-
-
-
-
-
-
-
 ```
-</td>
-</tr>
-</table>
 
 ## Goals
 
