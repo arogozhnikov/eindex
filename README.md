@@ -60,7 +60,9 @@ Non-goals: there is no goal to develop 'the shortest notation' or 'the most adva
 
 
 
-## Common operations
+## Examples
+
+Follow [tutorial](https://github.com/arogozhnikov/eindex/blob/main/tutorial/tutorial.ipynb) first to learn about all operations provided.
 
 <details>
 <summary>Click to unfold</summary>
@@ -74,20 +76,21 @@ closest_index = argmax(score, 'b h w token -> [h, w] b token')
 closest_emb = gather('b t c <- b h w c, [h, w] b token', images_bhwc, closest_index)
 ```
 
-To adjust this example for video, replace 'h w' to 'h w t'. Yes, that simple.
+To adjust this example for video not image, replace 'h w' to 'h w t'. Yes, that simple.
 
 
-#### - how to collect top-1 or top-3 predicted tokens for every position in audio/text?
+#### - how to collect top-1 or top-3 predicted word for every position in audio/text?
 
 ```python
-[most_likely_token] = argmax(prob_tbc, 't b c -> [c] t b')
-[top_tokens] = argsort(prob_tbc, 't b c -> [c] t b order')[..., -3:]
+[most_likely_words] = argmax(prob_tbc, 't b w -> [w] t b')
+[top_words] = argsort(prob_tbc, 't b w -> [w] t b order')[..., -3:]
 ```
 
 #### - how to average embeddings over neighbors in a graph?
 ```python
+# without batch (single graph)
 gather('vout <- vin c, [vin, vout] edge', embeddings, edges)
-# same with batch
+# with batch (multile graphs)
 gather('b vout <- b vin c, [b, vin, vout] edge', embeddings, edges)
 ``` 
 
@@ -112,7 +115,7 @@ In a similar way we could produce vector-shift attention (another typical versio
 ```python
 vector_shift = gather('i1 j1 i2 j2 head c <- i j head c, [i, j] i1 j1 i2 j2', biases, xy_diff)
 ```
-</summary>
+</details>
 
 
 
