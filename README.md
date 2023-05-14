@@ -59,11 +59,68 @@ def kmeans_eindex(init_centers, X, n_iterations: int):
 Non-goals: there is no goal to develop 'the shortest notation' or 'the most advanced/comprehensive tool for indexing' or 'cover as many operations as possible' or 'completely replace default indexing'.
 
 
+
+## Common operations
+
+<details>
+<summary>Click to unfold</summary>
+
+#### - how do I select a single embedding from every image in a batch?
+
+Let's say you have pairs of images and captions, and you want to take closest embedding:
+```python
+score = einsum(images_bhwc, sentences_btc, 'b h w c, b token c -> b h w token')
+closest_index = argmax(score, 'b h w token -> [h, w] b token')
+closest_emb = gather('b t c <- b h w c, [h, w] b token', images_bhwc, closest_index)
+```
+
+To adjust this example for video, replace 'h w' to 'h w t'. Yes, that simple.
+
+
+#### - how to collect top-1 or top-3 predicted tokens for every position in audio/text?
+
+```python
+[most_likely_token] = argmax(prob_tbc, 't b c -> [c] t b')
+[top_tokens] = argsort(prob_tbc, 't b c -> [c] t b order')[..., -3:]
+```
+
+#### - how to average embeddings over neighbors in a graph?
+```python
+gather('vout <- vin c, [vin, vout] edge', embeddings, edges)
+# same with batch
+gather('b vout <- b vin c, [b, vin, vout] edge', embeddings, edges)
+``` 
+
+#### - can eindex help with (complex) positional embeddings?
+
+If we're speaking about trainable abspos, it can be just saved as `emb_hwc` and added every time to a batch.
+There is no need for indexing. 
+
+But it can be very helpful for complex scenarios: for example in T5-relpos, when a bias is added to every logit before softmax-ing to compute attention?
+That's simple to implement for 1d, and *much* harder for 2d/3d. Let's implement for 2d with eindex:
+```python
+N = None
+pos # [I, J] i j
+pos1 = pos[:, :, :, N, N]
+pos2 = pos[:, N, N, :, :]
+xy_diff = (pos1 - pos2) % image_side  # we make shifts positive by wrapping
+attention_bias = gather('i1 j1 i2 j2 head <- i j head , [i, j] i1 j1 i2 j2', biases, xy_diff)
+```
+Note that we indeed encounter relative position (shift in x and y), which is not done in most implementations that deal with flat sequence instead.
+
+In a similar way we could produce vector-shift attention (another typical version of relpos):
+```python
+vector_shift = gather('i1 j1 i2 j2 head c <- i j head c, [i, j] i1 j1 i2 j2', biases, xy_diff)
+```
+</summary>
+
+
+
 ## Implementation
 
 Repo provides two implementation:
 
-- array api standard. This implementation is based on a standard that multiple frameworks pre-agreed to follow.
+- array api standard. This implementation is based on a [standard](https://data-apis.org/array-api/latest/) that multiple frameworks pre-agreed to follow.
   Implementation uses only API from standard, so all available operations support all frameworks that follow the standard.
 
   At some point this should become the one and the only implementation.
@@ -96,12 +153,12 @@ Other projects you likely want to look at:
 
 ## Contributing
 
-We welcome following contributions:
+We welcome the following contributions:
 
 - next time you deal with multidimensional indexing, do this with eindex <br />
   Worked? &rarr; great - [let us know](https://github.com/arogozhnikov/eindex/discussions/new?category=show-and-tell); didn't work or unclear how to implement &rarr; post in [discussions](https://github.com/arogozhnikov/eindex/discussions)
 - if you feel you're already fluent in eindex, help others
-- alternative guides/tutorials/video-guides are very welcome
+- guides/tutorials/video-guides are very welcome, and will be linked
 - If you want to translate tutorial to other language and post it somewhere - welcome 
 
 
