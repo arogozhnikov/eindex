@@ -45,6 +45,9 @@ def kmeans_eindex(init_centers, X, n_iterations: int):
     return centers
 ```
 
+## [Tutorial notebook](https://github.com/arogozhnikov/eindex/blob/main/tutorial/tutorial.ipynb)
+
+
 ## Goals
 
 - Form helpful 'language' to think about indexing and index-related operations. Tools shape minds 
