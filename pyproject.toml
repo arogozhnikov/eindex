@@ -48,25 +48,6 @@ exclude = [
 # should use packages from main section
 
 
-[tool.hatch.envs.docs]
-dependencies = [
-    "black==23.1.0",
-    "mkdocs~=1.4.0",
-    "mkdocs-material~=8.5.5",
-    "mkdocstrings[python-legacy]~=0.19.0",
-    "mkdocs-jupyter~=0.22.0",
-    # required by codehilite (highlithing in mkdocs)
-    "pygments~=2.13.0",
-]
-[tool.hatch.envs.docs.scripts]
-# For examples to build one has to run:
-# hatch run docs:build
-format = "black ."
-convert = "python scripts/convert_readme.py"
-build = "convert && mkdocs build --clean --strict {args}"
-serve = "convert && mkdocs serve --dev-addr localhost:8000 {args}"
-deploy = "convert && mkdocs build --clean --strict && mkdocs gh-deploy"
-
 
 [tool.hatch.envs.pypi.scripts]
 # hatch run pypi:deploy_test
@@ -74,7 +55,7 @@ deploy_test = "hatch build --clean && hatch publish -r test"
 deploy = "hatch build --clean && hatch publish"
 
 [tool.hatch.envs.testing.env-vars]
-# be default use numpy
+# currently using nightly numpy, so we need to add an additional index
 PIP_INDEX_URL = "https://pypi.anaconda.org/scipy-wheels-nightly/simple/"
 # fallback to original code
 PIP_EXTRA_INDEX_URL = "https://pypi.org/simple/"
