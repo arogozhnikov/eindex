@@ -103,15 +103,15 @@ Presence = Tuple[bool, bool, bool, bool]
 class ParsedPattern:
     def __init__(self, pattern: str) -> None:
         self.pattern = pattern
-        left, right = pattern.split("<-")
-        arr_pattern, _, ind_pattern = right.partition(",")
+        left, right = pattern.split("->")
+        arr_pattern, _, ind_pattern = left.partition(",")
 
-        self.res_axes_names = _parse_space_separated_dimensions(left)
+        self.res_axes_names = _parse_space_separated_dimensions(right)
         self.arr_axes_names = _parse_space_separated_dimensions(arr_pattern)
         self.ind_axes_names, self.ind_other_axes_names = _parse_indexing_part(ind_pattern)
 
         for group_name, group, subpattern in [
-            ("Result", self.res_axes_names, left),
+            ("Result", self.res_axes_names, right),
             ("Array", self.arr_axes_names, arr_pattern),
             ("Indexer", self.ind_axes_names + self.ind_other_axes_names, ind_pattern),
         ]:

@@ -31,9 +31,10 @@ we broadcast indices to the same order btl:
 ```python
 
 patches = gather(
-    'b t l c <- b T L c, [T, L] b t l', images, 
+    images, 
     # T_bt -> T_bt1, L_bl -> L_b1l
-    [T_bt[:, :, None], L_bl[:, None, :]]
+    [T_bt[:, :, None], L_bl[:, None, :]],
+    'b T L c, [T, L] b t l -> b t l c', 
 )
 ```
 

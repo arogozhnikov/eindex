@@ -75,11 +75,11 @@ def test_simple_indexing():
     arr = pseudo_random_tensor(np, [5, 7])
 
     ind = np.arange(7) % 5
-    x = _einindex("j <- i j, [i] j", arr, [ind])
+    x = _einindex(arr, [ind], "i j, [i] j -> j")
     for j, i in _enum_1d(ind):
         assert arr[i, j] == x[j]
 
-    y = _einindex("j <- j i, [i] j", np.transpose(arr, (1, 0)), [ind])
+    y = _einindex(np.transpose(arr, (1, 0)), [ind], "j i, [i] j -> j")
     for j, i in _enum_1d(ind):
         assert arr[i, j] == y[j]
 
@@ -102,10 +102,10 @@ def test_multidimensional_indexing():
     # goal is to get most suitable token from image for every token in sentence
     # thus for every token in sentence you compute best H and vW
 
-    result = _einindex("c t b <- b H W c, [H, W] b t", embedding_bhwc, [hindices_bt, windices_bt])
+    result = _einindex(embedding_bhwc, [hindices_bt, windices_bt], "b H W c, [H, W] b t -> c t b")
     # example of using a single array for indexing multiple axes
     hw_indices_bt = np.stack([hindices_bt, windices_bt])
-    result2 = _einindex("c t b <- b H W c, [H, W] b t", embedding_bhwc, hw_indices_bt)
+    result2 = _einindex(embedding_bhwc, hw_indices_bt, "b H W c, [H, W] b t -> c t b")
     assert np.all(result == result2)
 
     # check vs manual element computation
@@ -137,7 +137,7 @@ def test_reverse_indexing():
 
     t_indices_gbhw = np.reshape(np.arange(G * B * H * W), (G, B, H, W)) % T
 
-    result = _einindex("g b c h w <- g t b c, [t] g b h w", arr_gtbc, [t_indices_gbhw])
+    result = _einindex(arr_gtbc, [t_indices_gbhw], "g t b c, [t] g b h w -> g b c h w")
 
     result_manual = result * 0
     for g in range(G):
@@ -178,19 +178,19 @@ def test_argmax_by_indexing():
     assert np.all(argmax(x, "i j k -> [i] k j")[0, ...] == reference.T)
 
     ind = argmax(x, "i j k -> [i] j k")
-    assert np.all(_einindex("j k <- i j k, [i] j k", x, ind) == np.max(x, axis=0))
+    assert np.all(_einindex(x, ind, "i j k, [i] j k -> j k") == np.max(x, axis=0))
 
     ind = argmax(x, "i j k -> [i, j] k")
-    assert np.all(_einindex("k <- i j k, [i, j] k", x, ind) == np.max(x, axis=(0, 1)))
+    assert np.all(_einindex(x, ind, "i j k, [i, j] k -> k") == np.max(x, axis=(0, 1)))
 
     ind = argmax(x, "i j k -> [j, i] k")
-    assert np.all(_einindex("k <- i j k, [j, i] k", x, ind) == np.max(x, axis=(0, 1)))
+    assert np.all(_einindex(x, ind, "i j k, [j, i] k -> k") == np.max(x, axis=(0, 1)))
 
     ind = argmax(x, "i j k -> [i, k] j")
-    assert np.all(_einindex("j <- i j k, [i, k] j", x, ind) == np.max(x, axis=(0, 2)))
+    assert np.all(_einindex(x, ind, "i j k, [i, k] j -> j") == np.max(x, axis=(0, 2)))
 
     ind = argmax(x, "i j k -> [k, i, j]")
-    assert np.all(_einindex(" <- i j k, [k, i, j]", x, ind) == np.max(x))
+    assert np.all(_einindex(x, ind, "i j k, [k, i, j] -> ") == np.max(x))
 
     check_max_min(x, "i j k -> [k, i, j]")
     check_max_min(x, "i j k -> [i, j] k")
@@ -207,12 +207,12 @@ def test_argsort_against_numpy():
     assert np.all(argsort(x, "i j k -> [i] k j order")[0, ...] == right)
 
     ind = argsort(x, "i j k -> [k, i, j] order")
-    assert np.all(_einindex("order <- i j k, [k, i, j] order", x, ind) == np.sort(np.reshape(x, (-1,))))
+    assert np.all(_einindex(x, ind, "i j k, [k, i, j] order -> order") == np.sort(np.reshape(x, (-1,))))
 
     ind = argsort(x, "i j k -> [k, i] order j")
     reference = np.transpose(x, (0, 2, 1))
     reference = np.reshape(reference, (-1, reference.shape[-1]))
-    assert np.all(_einindex("order j <- i j k, [k, i] order j", x, ind) == np.sort(reference, axis=0))
+    assert np.all(_einindex(x, ind, "i j k, [k, i] order j -> order j") == np.sort(reference, axis=0))
 
 
 def test_gather_scatter_runs():
@@ -221,7 +221,7 @@ def test_gather_scatter_runs():
     indices = np.arange(5)
     groups = np.arange(5) // 2 * 0
 
-    result = gather_scatter("i j <- i j g, [g, i] order", x, [groups, indices])
+    result = gather_scatter(x, [groups, indices], "i j g, [g, i] order -> i j")
     print(result)
 
 
@@ -239,8 +239,8 @@ def test_index():
 
     array = generate_array(np, "a b c d", sizes=sizes)
     indexer = generate_indexer(np, "[a, c] d f g", sizes=sizes)
-    result1 = _einindex("g f d b <- a b c d, [a, c] d f g", array, indexer)
-    result2 = gather("g f d b <- a b c d, [a, c] d f g", array, indexer)
+    result1 = _einindex(array, indexer, "a b c d, [a, c] d f g -> g f d b")
+    result2 = gather(array, indexer, "a b c d, [a, c] d f g -> g f d b")
     assert np.allclose(result1, result2)
     indexer_as_dict = enumerate_indexer(_numpy_ixp, "[a, c] d f g", indexer=indexer, sizes=sizes)
 
@@ -277,10 +277,10 @@ def test_gather():
     final_pattern = "b c d"
     array_pattern = "b i1 i2 d r"
     index_pattern = "[i1, i2] c b a r"
-    full_pattern = f"{final_pattern} <- {array_pattern}, {index_pattern}"
+    full_pattern = f"{array_pattern}, {index_pattern} -> {final_pattern}"
     array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
     indexer = generate_indexer(np, index_pattern, sizes=sizes)
-    result_gather = gather(full_pattern, array, indexer, agg="sum")
+    result_gather = gather(array, indexer, full_pattern, agg="sum")
     indexer_as_dict = enumerate_indexer(_numpy_ixp, index_pattern, indexer=indexer, sizes=sizes)
 
     array_flat = flatten(np, array)
@@ -302,7 +302,7 @@ def test_gather():
         ("min", min, np.inf),
         ("max", max, -np.inf),
     ]:
-        result_gather = gather(full_pattern, array, indexer, agg=agg_name).reshape(-1)
+        result_gather = gather(array, indexer, full_pattern, agg=agg_name).reshape(-1)
         result_ref = np.full(shape=[sizes[d] for d in final_pattern.split()], fill_value=default_value).reshape(-1)
         for d in range(sizes["d"]):
             flat_index_array = to_flat_index(array_pattern, {**indexer_as_dict, "d": d}, sizes=sizes)
@@ -313,12 +313,12 @@ def test_gather():
         assert np.allclose(result_ref, result_gather)
 
     # checking mean aggregation on constant tensor
-    result_mean_const = gather(full_pattern, array * 0 + 3.0, indexer, agg="mean")
+    result_mean_const = gather(array * 0 + 3.0, indexer, full_pattern, agg="mean")
     assert np.allclose(result_mean_const, 3.0)
 
     # testing that ratio is constant, as number of elements averaged is the same for every result entry
-    result_mean = gather(full_pattern, array.clip(0) + 1.0, indexer, agg="mean")
-    result__sum = gather(full_pattern, array.clip(0) + 1.0, indexer, agg="sum")
+    result_mean = gather(array.clip(0) + 1.0, indexer, full_pattern, agg="mean")
+    result__sum = gather(array.clip(0) + 1.0, indexer, full_pattern, agg="sum")
     ratio = result_mean / result__sum
     assert ratio.min() * 0.99 < ratio.max() < ratio.min() * 1.01
 
@@ -337,10 +337,10 @@ def test_scatter():
     array_pattern = "b c d"
     index_pattern = "[f, h] c b e"
     final_pattern = "b f h d e"
-    full_pattern: str = f"{final_pattern} <- {array_pattern}, {index_pattern}"
+    full_pattern: str = f"{array_pattern}, {index_pattern} -> {final_pattern}"
     array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
     indexer = generate_indexer(np, index_pattern, sizes=sizes)
-    result = scatter(full_pattern, array, indexer, f=sizes["f"], h=sizes["h"])
+    result = scatter(array, indexer, full_pattern, f=sizes["f"], h=sizes["h"])
     indexer_as_dict = enumerate_indexer(_numpy_ixp, index_pattern, indexer=indexer, sizes=sizes)
 
     array_flat = flatten(np, array)
@@ -357,7 +357,7 @@ def test_scatter():
 
     # check different aggregations
     for agg_name, agg_func, default_value in list_aggname_aggfunc_default_value():
-        result_scatter = scatter(full_pattern, array, indexer, agg=agg_name, f=sizes["f"], h=sizes["h"]).reshape(-1)
+        result_scatter = scatter(array, indexer, full_pattern, agg=agg_name, f=sizes["f"], h=sizes["h"]).reshape(-1)
         result_ref = np.full(
             shape=[sizes[d] for d in final_pattern.split()], fill_value=default_value, dtype=array.dtype
         ).reshape(-1)
@@ -370,8 +370,8 @@ def test_scatter():
         assert np.allclose(result_ref, result_scatter)
 
     # testing aggregation on constant
-    result = scatter(full_pattern, array * 0 + 3.0, indexer, agg="mean", f=sizes["f"], h=sizes["h"])
-    result_sum = scatter(full_pattern, array * 0 + 1.0, indexer, agg="sum", f=sizes["f"], h=sizes["h"])
+    result = scatter(array * 0 + 3.0, indexer, full_pattern, agg="mean", f=sizes["f"], h=sizes["h"])
+    result_sum = scatter(array * 0 + 1.0, indexer, full_pattern, agg="sum", f=sizes["f"], h=sizes["h"])
     assert np.allclose(result[result_sum > 0], 3.0)
     assert np.all(np.isnan(result[result_sum == 0]))
 
@@ -390,10 +390,10 @@ def test_gather_scatter():
     final_pattern = "             b c i1 i3 f  "
     array_pattern = "             b c i1 i2    "
     index_pattern = "[i1, i2, i3] b         f r"
-    full_pattern = f"{final_pattern} <- {array_pattern}, {index_pattern} "
+    full_pattern = f"{array_pattern}, {index_pattern}  -> {final_pattern}"
     array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
     indexer = generate_indexer(np, index_pattern, sizes=sizes)
-    result = gather_scatter(full_pattern, array, indexer, i3=sizes["i3"])
+    result = gather_scatter(array, indexer, full_pattern, i3=sizes["i3"])
     indexer_as_dict = enumerate_indexer(_numpy_ixp, index_pattern, indexer=indexer, sizes=sizes)
 
     array_flat = flatten(np, array)
@@ -410,7 +410,7 @@ def test_gather_scatter():
 
     # check different aggregations
     for agg_name, agg_func, default_value in list_aggname_aggfunc_default_value():
-        result_gst = gather_scatter(full_pattern, array, indexer, agg=agg_name, i3=sizes["i3"]).reshape(-1)
+        result_gst = gather_scatter(array, indexer, full_pattern, agg=agg_name, i3=sizes["i3"]).reshape(-1)
         result_ref = np.full(
             shape=[sizes[d] for d in final_pattern.split()], fill_value=default_value, dtype=array.dtype
         ).reshape(-1)
@@ -423,12 +423,11 @@ def test_gather_scatter():
         assert np.allclose(result_ref, result_gst)
 
     # check aggregation of constant
-    result_mean = gather_scatter(full_pattern, array * 0 + 3.0, indexer, agg="mean", i3=sizes["i3"])
-    result_sum = gather_scatter(full_pattern, array * 0 + 1, indexer, agg="sum", i3=sizes["i3"])
+    result_mean = gather_scatter(array * 0 + 3.0, indexer, full_pattern, agg="mean", i3=sizes["i3"])
+    result_sum = gather_scatter(array * 0 + 1, indexer, full_pattern, agg="sum", i3=sizes["i3"])
     assert np.all(result_mean[result_sum > 0] == 3)
     assert np.all(np.isnan(result_mean[result_sum == 0]))
 
 
 # TODO test gatherscatter with combination of scatter and gather
 # TODO test several patterns per combination?
-# TODO get a way to deal with indexers

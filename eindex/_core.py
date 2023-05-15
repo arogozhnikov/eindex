@@ -203,7 +203,7 @@ def compute_full_index_ixp(
 class IndexFormula:
     def __init__(self, pattern: str):
         """
-        :param pattern: example 'b t c <- b H W c, [H, W] b t'
+        :param pattern: example 'b H W c, [H, W] b t -> b t c'
         """
         self.pattern_parser = ParsedPattern(pattern=pattern)
 
@@ -318,7 +318,7 @@ class GatherFormula:
     def __init__(self, pattern: str, agg: Optional[Aggregation]) -> None:
         """
         Example in which one aggregates the data
-        'b t c <- b H W s c, [H, W] b t s replica'
+        'b H W s c, [H, W] b t s replica -> b t c'
 
         where multiple replicas are aggregated by plain sum
         """
@@ -583,7 +583,7 @@ class GatherScatterFormula:
     def __init__(self, pattern: str, agg: Aggregation):
         """
         performs gather and scatter at the same time
-        :param pattern: e.g 'b t H W2 c <- b H W c, [H, W, W2] b t order'
+        :param pattern: e.g 'b H W c, [H, W, W2] b t order -> b t H W2 c'
         """
         self.parsed_pattern = ParsedPattern(pattern)
         self.agg = agg
