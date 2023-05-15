@@ -16,9 +16,9 @@ class DemoData:
             "Yoda",
             "Alice",
             "Gandalf",
-            "R. Daneel Olivaw",
+            "Harry Potter-Verres",
             "Devola & Popola",
-            # "Harry James Potter-Evans-Verres",
+            # "R. Daneel Olivaw",
             # Aerith,
             # Aloy,
         ]
