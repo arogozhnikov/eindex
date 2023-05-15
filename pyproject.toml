@@ -8,7 +8,7 @@ description = "A concept of multidimensional indexing for tensors"
 readme = "README.md"
 requires-python = ">=3.8"
 
-keywords = ['indexing', 'numpy', 'tensor', 'tensor indexing', 'einops']
+keywords = ['indexing', 'numpy', 'tensor', 'tensor indexing', 'eindex', 'einops']
 license = { text = 'MIT' }
 classifiers = [
     'Intended Audience :: Science/Research',
