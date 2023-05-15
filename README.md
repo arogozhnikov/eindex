@@ -20,11 +20,10 @@ def kmeans(init_centers, X, n_iterations: int):
     centers = init_centers.copy()
     for _ in range(n_iterations):
         d = cdist(centers, X)
-        clusters = np.argmin(d, axis=0)            
+        clusters = np.argmin(d, axis=0)
         new_centers_sum = np.zeros_like(centers)
-        clstr_indices = np.tile(clusters[:, None], reps=(1, n_dim))
-        dim_indices = np.tile(np.arange(n_dim)[None, :], reps=(n_onservations, 1))
-        np.add.at(new_centers_sum, (clstr_indices, dim_indices), X)
+        indices_dim = np.arange(n_dim)[None, :]
+        np.add.at(new_centers_sum, (clusters[:, None], indices_dim), X)
         cluster_counts = np.bincount(clusters, minlength=n_clusters)
         centers = new_centers_sum / cluster_counts[:, None]
     return centers

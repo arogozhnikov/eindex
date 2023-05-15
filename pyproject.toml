@@ -8,7 +8,7 @@ description = "A concept of multidimensional indexing for tensors"
 readme = "README.md"
 requires-python = ">=3.8"
 
-keywords = ['indexing', 'numpy', 'tensor', 'tensor indexing', 'einops']
+keywords = ['indexing', 'numpy', 'tensor', 'tensor indexing', 'eindex', 'einops']
 license = { text = 'MIT' }
 classifiers = [
     'Intended Audience :: Science/Research',
@@ -48,27 +48,24 @@ exclude = [
 # should use packages from main section
 
 
-
 [tool.hatch.envs.pypi.scripts]
 # hatch run pypi:deploy_test
 deploy_test = "hatch build --clean && hatch publish -r test"
 deploy = "hatch build --clean && hatch publish"
 
-[tool.hatch.envs.testing.env-vars]
-# currently using nightly numpy, so we need to add an additional index
-PIP_INDEX_URL = "https://pypi.anaconda.org/scipy-wheels-nightly/simple/"
-# fallback to original code
-PIP_EXTRA_INDEX_URL = "https://pypi.org/simple/"
-# allow pre-releases
-PIP_PRE = "1"
-
 
 [tool.hatch.envs.testing]
 dependencies = ['numpy', 'pytest']
 
-[tool.hatch.envs.testing.scripts]
+# currently using nightly numpy, so we need to add an additional index
+# fallback to standard pypi for other packages
+# allow pre-releases
+env-vars = { PIP_INDEX_URL = "https://pypi.anaconda.org/scipy-wheels-nightly/simple/", PIP_EXTRA_INDEX_URL = "https://pypi.org/simple/", PIP_PRE = "1" }
+# [tool.hatch.envs.testing.env-vars]
+
 # hatch run testing:test
-test = "pytest tests"
+scripts = { test = "pytest tests" }
+
 
 [tool.black]
 line-length = 120
