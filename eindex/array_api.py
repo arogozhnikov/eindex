@@ -52,13 +52,13 @@ def argsort(tensor: Array, pattern: str, /, *, order_axis="order") -> Array:
     return formula.apply_to_ixp(ixp, tensor)
 
 
-def _einindex(pattern: str, arr: Array, ind: Union[Array, List[Array]], /):
+def _einindex(arr: Array, ind: Union[Array, List[Array]], pattern: str, /):
     formula = _core.IndexFormula(pattern)
     ixp = _ArrayApiIXP(arr.__array_namespace__())
     return formula.apply_to_array_api(ixp, arr, ind)
 
 
-def gather(pattern: str, arr: Array, ind: Union[Array, List[Array]], agg: Optional[Aggregation] = None):
+def gather(arr: Array, ind: Union[Array, List[Array]], pattern: str, /, agg: Optional[Aggregation] = None):
     formula = _core.GatherFormula(pattern=pattern, agg=agg)
     ixp = _ArrayApiIXP(arr.__array_namespace__())
     return formula.apply_to_array_api(ixp, arr, ind)

@@ -45,25 +45,23 @@ def argsort(tensor: Array, pattern: str, /, *, order_axis="order") -> Array:
     return formula.apply_to_ixp(_numpy_ixp, tensor)
 
 
-def _einindex(pattern: str, arr: Array, ind: Union[Array, List[Array]], /):
+def _einindex(arr: Array, ind: Union[Array, List[Array]], pattern: str, /):
     formula = _core.IndexFormula(pattern)
     return formula.apply_to_numpy(_numpy_ixp, arr, ind)
 
 
-def gather(pattern: str, arr: Array, ind: Union[Array, List[Array]], agg: Optional[Aggregation] = None):
+def gather(arr: Array, ind: Union[Array, List[Array]], pattern: str, /, agg: Optional[Aggregation] = None):
     formula = _core.GatherFormula(pattern=pattern, agg=agg)
     return formula.apply_to_numpy(_numpy_ixp, arr, ind)
 
 
 def gather_scatter(
-    pattern: str, arr: Array, ind: Union[Array, List[Array]], /, agg: Aggregation = "sum", **axis_sizes: int
+    arr: Array, ind: Union[Array, List[Array]], pattern: str, /, agg: Aggregation = "sum", **axis_sizes: int
 ):
     formula = _core.GatherScatterFormula(pattern, agg=agg)
     return formula.apply_to_numpy(_numpy_ixp, arr, ind, axis_sizes=axis_sizes)
 
 
-def scatter(
-    pattern: str, arr: Array, ind: Union[Array, List[Array]], /, agg: Aggregation = "sum", **axis_sizes: int
-):
+def scatter(arr: Array, ind: Union[Array, List[Array]], pattern: str, /, agg: Aggregation = "sum", **axis_sizes: int):
     formula = _core.ScatterFormula(pattern, agg=agg)
     return formula.apply_to_numpy(_numpy_ixp, arr, ind, axis_sizes=axis_sizes)

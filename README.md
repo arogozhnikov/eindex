@@ -40,7 +40,7 @@ def kmeans_eindex(init_centers, X, n_iterations: int):
     for _ in range(n_iterations):
         d = cdist(centers, X)
         clusters = EX.argmin(d, 'cluster i -> [cluster] i')
-        centers = EX.scatter('cluster c <- i c, [cluster] i ', X, clusters, 
+        centers = EX.scatter('i c, [cluster] i  -> cluster c', X, clusters, 
                              agg='mean', cluster=len(centers))
     return centers
 ```
@@ -73,7 +73,7 @@ Let's say you have pairs of images and captions, and you want to take closest em
 ```python
 score = einsum(images_bhwc, sentences_btc, 'b h w c, b token c -> b h w token')
 closest_index = argmax(score, 'b h w token -> [h, w] b token')
-closest_emb = gather('b t c <- b h w c, [h, w] b token', images_bhwc, closest_index)
+closest_emb = gather('b h w c, [h, w] b token -> b t c', images_bhwc, closest_index)
 ```
 
 To adjust this example for video not image, replace 'h w' to 'h w t'. Yes, that simple.
@@ -89,9 +89,9 @@ To adjust this example for video not image, replace 'h w' to 'h w t'. Yes, that 
 #### - how to average embeddings over neighbors in a graph?
 ```python
 # without batch (single graph)
-gather('vout <- vin c, [vin, vout] edge', embeddings, edges)
+gather('vin c, [vin, vout] edge -> vout', embeddings, edges)
 # with batch (multile graphs)
-gather('b vout <- b vin c, [b, vin, vout] edge', embeddings, edges)
+gather('b vin c, [b, vin, vout] edge -> b vout', embeddings, edges)
 ``` 
 
 #### - can eindex help with (complex) positional embeddings?
@@ -107,13 +107,13 @@ pos # [I, J] i j
 pos1 = pos[:, :, :, N, N]
 pos2 = pos[:, N, N, :, :]
 xy_diff = (pos1 - pos2) % image_side  # we make shifts positive by wrapping
-attention_bias = gather('i1 j1 i2 j2 head <- i j head , [i, j] i1 j1 i2 j2', biases, xy_diff)
+attention_bias = gather('i j head , [i, j] i1 j1 i2 j2 -> i1 j1 i2 j2 head', biases, xy_diff)
 ```
 Note that we indeed encounter relative position (shift in x and y), which is not done in most implementations that deal with flat sequence instead.
 
 In a similar way we could produce vector-shift attention (another typical version of relpos):
 ```python
-vector_shift = gather('i1 j1 i2 j2 head c <- i j head c, [i, j] i1 j1 i2 j2', biases, xy_diff)
+vector_shift = gather('i j head c, [i, j] i1 j1 i2 j2 -> i1 j1 i2 j2 head c', biases, xy_diff)
 ```
 </details>
 

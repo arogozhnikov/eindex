@@ -64,11 +64,11 @@ def test_simple_indexing():
     # simple 2d test
     arr = pseudo_random_tensor(np, [5, 7])
     ind = np.arange(7) % 5
-    x = _einindex("j <- i j, [i] j", arr, [ind])
+    x = _einindex(arr, [ind], "i j, [i] j -> j")
     for j, i in _enum_1d(ind):
         assert arr[i, j] == x[j]
 
-    y = _einindex("j <- j i, [i] j", np.permute_dims(arr, (1, 0)), [ind])
+    y = _einindex(np.permute_dims(arr, (1, 0)), [ind], "j i, [i] j -> j")
     for j, i in _enum_1d(ind):
         assert arr[i, j] == y[j]
 
@@ -95,10 +95,10 @@ def test_multidimensional_indexing():
     # goal is to get most suitable token from image for every token in sentence
     # thus for every token in sentence you compute best H and vW
 
-    result = _einindex("c t b <- b H W c, [H, W] b t", embedding_bhwc, [hindices_bt, windices_bt])
+    result = _einindex(embedding_bhwc, [hindices_bt, windices_bt], "b H W c, [H, W] b t -> c t b")
     # example of using a single array for indexing multiple axes
     hw_indices_bt = xp.stack([hindices_bt, windices_bt])
-    result2 = _einindex("c t b <- b H W c, [H, W] b t", embedding_bhwc, hw_indices_bt)
+    result2 = _einindex(embedding_bhwc, hw_indices_bt, "b H W c, [H, W] b t -> c t b")
     assert xp.all(result == result2)
 
     # check vs manual element computation
@@ -135,7 +135,7 @@ def test_reverse_indexing():
         + ixp.arange_at_position(4, 3, C, _t) * 1
     )
 
-    result = _einindex("g b c h w <- g t b c, [t] g b h w", arr_gtbc, [t_indices_gbhw])
+    result = _einindex(arr_gtbc, [t_indices_gbhw], "g t b c, [t] g b h w -> g b c h w")
 
     result_manual = result * 0
     for g in range(G):
@@ -183,19 +183,19 @@ def test_argmax_by_indexing():
     assert np.all(argmax(x, "i j k -> [i] k j")[0, ...] == reference.T)
 
     ind = argmax(x, "i j k -> [i] j k")
-    assert np.all(_einindex("j k <- i j k, [i] j k", x, ind) == np.max(x, axis=0))
+    assert np.all(_einindex(x, ind, "i j k, [i] j k -> j k") == np.max(x, axis=0))
 
     ind = argmax(x, "i j k -> [i, j] k")
-    assert np.all(_einindex("k <- i j k, [i, j] k", x, ind) == np.max(x, axis=(0, 1)))
+    assert np.all(_einindex(x, ind, "i j k, [i, j] k -> k") == np.max(x, axis=(0, 1)))
 
     ind = argmax(x, "i j k -> [j, i] k")
-    assert np.all(_einindex("k <- i j k, [j, i] k", x, ind) == np.max(x, axis=(0, 1)))
+    assert np.all(_einindex(x, ind, "i j k, [j, i] k -> k") == np.max(x, axis=(0, 1)))
 
     ind = argmax(x, "i j k -> [i, k] j")
-    assert np.all(_einindex("j <- i j k, [i, k] j", x, ind) == np.max(x, axis=(0, 2)))
+    assert np.all(_einindex(x, ind, "i j k, [i, k] j -> j") == np.max(x, axis=(0, 2)))
 
     ind = argmax(x, "i j k -> [k, i, j]")
-    assert np.all(_einindex(" <- i j k, [k, i, j]", x, ind) == np.max(x))
+    assert np.all(_einindex(x, ind, "i j k, [k, i, j] -> ") == np.max(x))
 
     check_max_min(x, "i j k -> [k, i, j]")
     check_max_min(x, "i j k -> [i, j] k")
@@ -214,12 +214,12 @@ def test_argsort_against_numpy():
     assert np.all(argsort(x, "i j k -> [i] k j order")[0, ...] == right)
 
     ind = argsort(x, "i j k -> [k, i, j] order")
-    assert np.all(_einindex("order <- i j k, [k, i, j] order", x, ind) == np.sort(np.reshape(x, (-1,))))
+    assert np.all(_einindex(x, ind, "i j k, [k, i, j] order -> order") == np.sort(np.reshape(x, (-1,))))
 
     ind = argsort(x, "i j k -> [k, i] order j")
     reference = np.permute_dims(x, (0, 2, 1))
     reference = np.reshape(reference, (-1, reference.shape[-1]))
-    assert np.all(_einindex("order j <- i j k, [k, i] order j", x, ind) == np.sort(reference, axis=0))
+    assert np.all(_einindex(x, ind, "i j k, [k, i] order j -> order j") == np.sort(reference, axis=0))
 
 
 def test_index():
@@ -240,8 +240,8 @@ def test_index():
 
     array = generate_array(xp, "a b c d", sizes=sizes)
     indexer = generate_indexer(xp, "[a, c] d f g", sizes=sizes)
-    result_einindex = _einindex("g f d b <- a b c d, [a, c] d f g", array, indexer)
-    result = gather("g f d b <- a b c d, [a, c] d f g", array, indexer)
+    result_einindex = _einindex(array, indexer, "a b c d, [a, c] d f g -> g f d b")
+    result = gather(array, indexer, "a b c d, [a, c] d f g -> g f d b")
     print(result.shape, flatten(xp, result)[0])
     print(result_einindex.shape, flatten(xp, result_einindex)[0])
     indexer_as_dict = enumerate_indexer(ixp, "[a, c] d f g", indexer=indexer, sizes=sizes)
@@ -275,10 +275,10 @@ def test_gather():
     final_pattern = "b c d"
     array_pattern = "b i1 i2 d r"
     index_pattern = "[i1, i2] c b a r"
-    full_pattern = f"{final_pattern} <- {array_pattern}, {index_pattern}"
+    full_pattern = f"{array_pattern}, {index_pattern} -> {final_pattern}"
     array = generate_array(np, array_pattern=array_pattern, sizes=sizes)
     indexer = generate_indexer(np, index_pattern, sizes=sizes)
-    result_gather = gather(full_pattern, array, indexer, agg="sum")
+    result_gather = gather(array, indexer, full_pattern, agg="sum")
 
     _ixp = _ArrayApiIXP(np)
     indexer_as_dict = enumerate_indexer(_ixp, index_pattern, indexer=indexer, sizes=sizes)
@@ -303,7 +303,7 @@ def test_gather():
         ("min", min, np.inf),
         ("max", max, -np.inf),
     ]:
-        result_gather = gather(full_pattern, array, indexer, agg=agg_name)
+        result_gather = gather(array, indexer, full_pattern, agg=agg_name)
         result_gather = np.reshape(result_gather, (-1,))
         result_ref = np.full(shape=tuple(sizes[d] for d in final_pattern.split()), fill_value=default_value)
         result_ref = np.reshape(result_ref, (-1,))
@@ -316,12 +316,12 @@ def test_gather():
         assert np.all(np.astype(result_ref, np.int64) == result_gather)
 
     # checking mean aggregation on constant tensor
-    result_mean_const = gather(full_pattern, np.full(array.shape, fill_value=3.0), indexer, agg="mean")
+    result_mean_const = gather(np.full(array.shape, fill_value=3.0), indexer, full_pattern, agg="mean")
     assert np.all(result_mean_const == 3.0)
 
     # testing that ratio is constant, as number of elements averaged is the same for every result entry
     values = np.astype(array**2, np.float64) + 1.0
-    result_mean = gather(full_pattern, values, indexer, agg="mean")
-    result__sum = gather(full_pattern, values, indexer, agg="sum")
+    result_mean = gather(values, indexer, full_pattern, agg="mean")
+    result__sum = gather(values, indexer, full_pattern, agg="sum")
     ratio = result_mean / result__sum
     assert np.min(ratio) * 0.99 < np.max(ratio) < np.min(ratio) * 1.01
