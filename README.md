@@ -4,7 +4,7 @@
 
 # eindex
 
-Multidimensional indexing for tensors
+Concept of multidimensional indexing for tensors
 
 
 ## Example of K-means clustering
@@ -23,9 +23,8 @@ def kmeans(init_centers, X, n_iterations: int):
         clusters = np.argmin(d, axis=0)            
         new_centers_sum = np.zeros_like(centers)
         clstr_indices = np.tile(clusters[:, None], reps=(1, n_dim))
-        dim___indices = np.tile(np.arange(n_dim)[None, :], 
-                                reps=(n_onservations, 1))
-        np.add.at(new_centers_sum, (clstr_indices, dim___indices), X)
+        dim_indices = np.tile(np.arange(n_dim)[None, :], reps=(n_onservations, 1))
+        np.add.at(new_centers_sum, (clstr_indices, dim_indices), X)
         cluster_counts = np.bincount(clusters, minlength=n_clusters)
         centers = new_centers_sum / cluster_counts[:, None]
     return centers
@@ -40,7 +39,7 @@ def kmeans_eindex(init_centers, X, n_iterations: int):
     for _ in range(n_iterations):
         d = cdist(centers, X)
         clusters = EX.argmin(d, 'cluster i -> [cluster] i')
-        centers = EX.scatter('i c, [cluster] i  -> cluster c', X, clusters, 
+        centers = EX.scatter(X, clusters, 'i c, [cluster] i -> cluster c',  
                              agg='mean', cluster=len(centers))
     return centers
 ```
