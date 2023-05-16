@@ -48,7 +48,7 @@ def kmeans_eindex(init_centers, X, n_iterations: int):
 
 ## Goals
 
-- Form helpful 'language' to think about indexing and index-related operations. Tools shape minds 
+- Form a helpful 'language' to think about indexing and index-related operations. Tools shape minds
 - Cover most common cases of multidimensional indexing that are hard to implement using the standard API
 - Approach should be applicable to most common tensor frameworks, autograd should work out-of-the-box
 - Aim for readable and reliable code
@@ -70,7 +70,7 @@ Follow [tutorial](https://github.com/arogozhnikov/eindex/blob/main/tutorial/tuto
 
 #### - how do I select a single embedding from every image in a batch?
 
-Let's say you have pairs of images and captions, and you want to take closest embedding:
+Let's say you have pairs of images and captions, and you want to take closest embedding from image for every token:
 ```python
 score = einsum(images_bhwc, sentences_btc, 'b h w c, b token c -> b h w token')
 closest_index = argmax(score, 'b h w token -> [h, w] b token')
@@ -88,11 +88,12 @@ To adjust this example for video not image, replace 'h w' to 'h w t'. Yes, that 
 ```
 
 #### - how to average embeddings over neighbors in a graph?
+  
 ```python
 # without batch (single graph)
-gather('vin c, [vin, vout] edge -> vout', embeddings, edges)
+gatherscatter('vin c, [vin, vout] edge -> vout', embeddings, edges)
 # with batch (multile graphs)
-gather('b vin c, [b, vin, vout] edge -> b vout', embeddings, edges)
+gatherscatter('b vin c, [b, vin, vout] edge -> b vout', embeddings, edges)
 ``` 
 
 #### - can eindex help with (complex) positional embeddings?
@@ -100,8 +101,9 @@ gather('b vin c, [b, vin, vout] edge -> b vout', embeddings, edges)
 If we're speaking about trainable abspos, it can be just saved as `emb_hwc` and added every time to a batch.
 There is no need for indexing. 
 
-But it can be very helpful for complex scenarios: for example in T5-relpos, when a bias is added to every logit before softmax-ing to compute attention?
-That's simple to implement for 1d, and *much* harder for 2d/3d. Let's implement for 2d with eindex:
+But it can be very helpful for complex scenarios: let's take T5-relpos as an example, when a bias is added to every attention logit before softmax-ing.
+That's simple to implement for 1d, and *much* harder for 2d/3d. Let's implement T5-relpos in 2d with `eindex`:
+  
 ```python
 N = None
 pos # [I, J] i j
@@ -110,9 +112,9 @@ pos2 = pos[:, N, N, :, :]
 xy_diff = (pos1 - pos2) % image_side  # we make shifts positive by wrapping
 attention_bias = gather('i j head , [i, j] i1 j1 i2 j2 -> i1 j1 i2 j2 head', biases, xy_diff)
 ```
-Note that we indeed encounter relative position (shift in x and y), which is not done in most implementations that deal with flat sequence instead.
+Note that we use 2d-relative position (shift in x and y), while most implementations just use sequence shift.
 
-In a similar way we could produce vector-shift attention (another typical version of relpos):
+In a similar way we could produce vector-shift attention (another common version of relpos):
 ```python
 vector_shift = gather('i j head c, [i, j] i1 j1 i2 j2 -> i1 j1 i2 j2 head c', biases, xy_diff)
 ```
@@ -169,4 +171,5 @@ We welcome the following contributions:
 
 ## Discussions
 
-Use github discussions for this project https://github.com/arogozhnikov/eindex/discussions
+Use discussions at github for this project https://github.com/arogozhnikov/eindex/discussions
+
