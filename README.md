@@ -74,7 +74,7 @@ Let's say you have pairs of images and captions, and you want to take closest em
 ```python
 score = einsum(images_bhwc, sentences_btc, 'b h w c, b token c -> b h w token')
 closest_index = argmax(score, 'b h w token -> [h, w] b token')
-closest_emb = gather('b h w c, [h, w] b token -> b t c', images_bhwc, closest_index)
+closest_emb = gather(images_bhwc, closest_index, 'b h w c, [h, w] b token -> b t c')
 ```
 
 To adjust this example for video not image, replace 'h w' to 'h w t'. Yes, that simple.
@@ -91,9 +91,9 @@ To adjust this example for video not image, replace 'h w' to 'h w t'. Yes, that 
   
 ```python
 # without batch (single graph)
-gatherscatter('vin c, [vin, vout] edge -> vout', embeddings, edges)
+gatherscatter(embeddings, edges, 'vin c, [vin, vout] edge -> vout')
 # with batch (multile graphs)
-gatherscatter('b vin c, [b, vin, vout] edge -> b vout', embeddings, edges)
+gatherscatter(embeddings, edges, 'b vin c, [b, vin, vout] edge -> b vout')
 ``` 
 
 #### - can eindex help with (complex) positional embeddings?
@@ -110,14 +110,15 @@ pos # [I, J] i j
 pos1 = pos[:, :, :, N, N]
 pos2 = pos[:, N, N, :, :]
 xy_diff = (pos1 - pos2) % image_side  # we make shifts positive by wrapping
-attention_bias = gather('i j head , [i, j] i1 j1 i2 j2 -> i1 j1 i2 j2 head', biases, xy_diff)
+attention_bias = gather(biases, xy_diff, 'i j head , [i, j] i1 j1 i2 j2 -> i1 j1 i2 j2 head')
 ```
 Note that we use 2d-relative position (shift in x and y), while most implementations just use sequence shift.
 
 In a similar way we could produce vector-shift attention (another common version of relpos):
 ```python
-vector_shift = gather('i j head c, [i, j] i1 j1 i2 j2 -> i1 j1 i2 j2 head c', biases, xy_diff)
+vector_shift = gather(vectors, xy_diff, 'i j head c, [i, j] i1 j1 i2 j2 -> i1 j1 i2 j2 head c')
 ```
+
 </details>
 
 
