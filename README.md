@@ -74,7 +74,7 @@ Let's say you have pairs of images and captions, and you want to take closest em
 ```python
 score = einsum(images_bhwc, sentences_btc, 'b h w c, b token c -> b h w token')
 closest_index = argmax(score, 'b h w token -> [h, w] b token')
-closest_emb = gather(images_bhwc, closest_index, 'b h w c, [h, w] b token -> b t c')
+closest_emb = gather(images_bhwc, closest_index, 'b h w c, [h, w] b token -> b token c')
 ```
 
 To adjust this example for video not image, replace 'h w' to 'h w t'. Yes, that simple.
@@ -112,6 +112,7 @@ pos2 = pos[:, N, N, :, :]
 xy_diff = (pos1 - pos2) % image_side  # we make shifts positive by wrapping
 attention_bias = gather(biases, xy_diff, 'i j head , [i, j] i1 j1 i2 j2 -> i1 j1 i2 j2 head')
 ```
+  
 Note that we use 2d-relative position (shift in x and y), while most implementations just use sequence shift.
 
 In a similar way we could produce vector-shift attention (another common version of relpos):
