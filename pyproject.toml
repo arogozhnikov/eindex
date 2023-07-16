@@ -8,12 +8,18 @@ description = "A concept of multidimensional indexing for tensors"
 readme = "README.md"
 requires-python = ">=3.8"
 
-keywords = ['indexing', 'numpy', 'tensor', 'tensor indexing', 'eindex', 'einops']
+keywords = [
+    'indexing',
+    'numpy',
+    'tensor',
+    'tensor indexing',
+    'eindex',
+    'einops',
+]
 license = { text = 'MIT' }
 classifiers = [
     'Intended Audience :: Science/Research',
     'Programming Language :: Python :: 3',
-    'License :: OSI Approved :: MIT License',
 ]
 dependencies = [
     # no run-time dependencies,
@@ -56,12 +62,6 @@ deploy = "hatch build --clean && hatch publish"
 
 [tool.hatch.envs.testing]
 dependencies = ['numpy', 'pytest']
-
-# currently using nightly numpy, so we need to add an additional index
-# fallback to standard pypi for other packages
-# allow pre-releases
-env-vars = { PIP_INDEX_URL = "https://pypi.anaconda.org/scipy-wheels-nightly/simple/", PIP_EXTRA_INDEX_URL = "https://pypi.org/simple/", PIP_PRE = "1" }
-# [tool.hatch.envs.testing.env-vars]
 
 # hatch run testing:test
 scripts = { test = "pytest tests" }
